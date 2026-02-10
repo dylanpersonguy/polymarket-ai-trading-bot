@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Polymarket Bot — Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css?v=4">
+    <link rel="stylesheet" href="/static/style.css?v=5">
 </head>
 <body>
     <!-- ─── Toast Container ─────────────────────────────────── -->
@@ -166,14 +166,15 @@
                 <button class="btn btn-export" onclick="exportData('positions')">📥 Export</button>
             </div>
         </div>
+        <div id="positions-summary"></div>
         <div class="table-wrap">
             <table id="positions-table">
                 <thead><tr>
                     <th>Market</th><th>Type</th><th>Direction</th><th>Entry</th><th>Current</th>
-                    <th>Size</th><th>Stake</th><th>P&L</th><th>P&L %</th><th>Opened</th>
+                    <th>Size</th><th>Stake</th><th>P&L</th><th>P&L %</th><th>Δ Price</th><th>Held</th>
                 </tr></thead>
                 <tbody id="positions-body">
-                    <tr><td colspan="10" class="empty-state">No active positions</td></tr>
+                    <tr><td colspan="11" class="empty-state">No active positions</td></tr>
                 </tbody>
             </table>
         </div>
@@ -323,6 +324,6 @@
         <span>Auto-refreshes every 15s</span>
     </footer>
 
-    <script src="/static/dashboard.js?v=4"></script>
+    <script src="/static/dashboard.js?v=5"></script>
 </body>
 </html>

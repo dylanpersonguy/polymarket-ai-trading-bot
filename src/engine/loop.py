@@ -632,7 +632,93 @@ class TradingEngine:
             log.warning("engine.log_candidate_error", error=str(e))
 
     async def _check_positions(self) -> None:
-        pass
+        """Fetch live prices for all open positions and update PNL."""
+        if not self._db:
+            return
+
+        positions = self._db.get_open_positions()
+        if not positions:
+            self._positions = []
+            return
+
+        from src.connectors.polymarket_gamma import GammaClient
+
+        client = GammaClient()
+        snapshots: list[PositionSnapshot] = []
+        try:
+            for pos in positions:
+                try:
+                    market = await client.get_market(pos.market_id)
+
+                    # Find the matching token price
+                    current_price = pos.current_price  # fallback
+                    for tok in market.tokens:
+                        if tok.token_id == pos.token_id:
+                            current_price = tok.price
+                            break
+
+                    # Calculate PNL based on direction
+                    if pos.direction in ("BUY_YES", "BUY"):
+                        pnl = (current_price - pos.entry_price) * pos.size
+                    elif pos.direction in ("BUY_NO", "SELL"):
+                        pnl = (pos.entry_price - current_price) * pos.size
+                    else:
+                        pnl = (current_price - pos.entry_price) * pos.size
+
+                    self._db.update_position_price(
+                        pos.market_id, current_price, round(pnl, 4),
+                    )
+
+                    # Build snapshot for portfolio risk
+                    mkt_record = self._db.get_market(pos.market_id)
+                    snapshots.append(PositionSnapshot(
+                        market_id=pos.market_id,
+                        question=mkt_record.question if mkt_record else "",
+                        category=mkt_record.category if mkt_record else "",
+                        event_slug=market.slug or "",
+                        side="YES" if pos.direction in ("BUY_YES", "BUY") else "NO",
+                        size_usd=pos.stake_usd,
+                        entry_price=pos.entry_price,
+                        current_price=current_price,
+                        unrealised_pnl=round(pnl, 4),
+                    ))
+
+                    log.info(
+                        "engine.position_update",
+                        market_id=pos.market_id[:8],
+                        entry=pos.entry_price,
+                        current=current_price,
+                        pnl=round(pnl, 4),
+                    )
+
+                except Exception as e:
+                    log.warning(
+                        "engine.position_price_error",
+                        market_id=pos.market_id[:8],
+                        error=str(e),
+                    )
+                    # Keep stale snapshot
+                    snapshots.append(PositionSnapshot(
+                        market_id=pos.market_id,
+                        question="",
+                        category="",
+                        event_slug="",
+                        side="YES" if pos.direction in ("BUY_YES", "BUY") else "NO",
+                        size_usd=pos.stake_usd,
+                        entry_price=pos.entry_price,
+                        current_price=pos.current_price,
+                        unrealised_pnl=pos.pnl,
+                    ))
+
+        finally:
+            await client.close()
+
+        self._positions = snapshots
+        log.info(
+            "engine.positions_checked",
+            count=len(snapshots),
+            total_pnl=round(sum(s.unrealised_pnl for s in snapshots), 4),
+        )
 
     def get_status(self) -> dict[str, Any]:
         dd_state = self.drawdown.state

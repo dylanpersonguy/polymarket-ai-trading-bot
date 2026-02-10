@@ -164,7 +164,12 @@ async function updatePortfolio() {
     const pnlEl = $('#total-pnl');
     pnlEl.textContent = fmtD(d.total_pnl);
     pnlEl.className   = `card-value ${pnlClass(d.total_pnl)}`;
-    $('#unrealized-pnl').textContent = `Unrealized: ${fmtD(d.unrealized_pnl)}`;
+    const pnlSub = `Unrealized: ${fmtD(d.unrealized_pnl)}`;
+    const pnlBest = d.best_pnl ? ` | Best: ${fmtD(d.best_pnl)}` : '';
+    const pnlWorst = d.worst_pnl ? ` | Worst: ${fmtD(d.worst_pnl)}` : '';
+    $('#unrealized-pnl').textContent = d.open_positions > 0
+        ? pnlSub + pnlBest + pnlWorst
+        : pnlSub;
 
     $('#open-positions').textContent = d.open_positions;
     $('#total-invested').textContent = `Invested: ${fmtD(d.total_invested)}`;
@@ -249,21 +254,62 @@ async function updatePositions() {
     if (!d) return;
     const tbody = $('#positions-body');
     if (!d.positions || d.positions.length === 0) {
-        safeHTML(tbody, '<tr><td colspan="10" class="empty-state">No active positions</td></tr>');
+        safeHTML(tbody, '<tr><td colspan="11" class="empty-state">No active positions</td></tr>');
+        // Update summary strip
+        const strip = $('#positions-summary');
+        if (strip) safeHTML(strip, '');
         return;
     }
-    safeHTML(tbody, d.positions.map(p => `<tr>
-        <td title="${p.market_id}">${(p.question||p.market_id||'').substring(0,50)}</td>
-        <td>${p.market_type||'—'}</td>
-        <td><span class="pill ${p.direction==='BUY'?'pill-buy':'pill-sell'}">${p.direction||'—'}</span></td>
-        <td>${fmt(p.entry_price,3)}</td>
-        <td>${fmt(p.current_price,3)}</td>
-        <td>${fmt(p.size,1)}</td>
-        <td>${fmtD(p.stake_usd)}</td>
-        <td class="${pnlClass(p.pnl)}">${fmtD(p.pnl)}</td>
-        <td class="${pnlClass(p.pnl_pct)}">${fmtP(p.pnl_pct)}</td>
-        <td>${shortDate(p.opened_at)}</td>
-    </tr>`).join(''));
+
+    // Positions summary strip
+    const s = d.summary || {};
+    const strip = $('#positions-summary');
+    if (strip) {
+        safeHTML(strip, `
+            <div class="pnl-summary-strip">
+                <span class="pnl-stat">📊 <strong>${s.count||0}</strong> positions</span>
+                <span class="pnl-stat ${pnlClass(s.total_pnl)}">P&L: <strong>${fmtD(s.total_pnl)}</strong> (${fmtP(s.pnl_pct)})</span>
+                <span class="pnl-stat">Invested: <strong>${fmtD(s.total_invested)}</strong></span>
+                <span class="pnl-stat pnl-positive">✅ ${s.winners||0}W</span>
+                <span class="pnl-stat pnl-negative">❌ ${s.losers||0}L</span>
+                <span class="pnl-stat pnl-zero">➖ ${s.flat||0}F</span>
+            </div>
+        `);
+    }
+
+    safeHTML(tbody, d.positions.map(p => {
+        const pnl = p.pnl || 0;
+        const pnlPct = p.pnl_pct || 0;
+        const priceChange = p.price_change || 0;
+        const priceChangePct = p.price_change_pct || 0;
+        const arrow = priceChange > 0.001 ? '▲' : priceChange < -0.001 ? '▼' : '─';
+        const arrowClass = priceChange > 0.001 ? 'price-up' : priceChange < -0.001 ? 'price-down' : 'price-flat';
+        const hoursHeld = p.hours_held || 0;
+        const timeLabel = hoursHeld >= 24 ? `${(hoursHeld/24).toFixed(1)}d` : `${hoursHeld.toFixed(1)}h`;
+
+        return `<tr class="position-row ${pnlClass(pnl)}">
+            <td title="${p.market_id}">${(p.question||p.market_id||'').substring(0,50)}</td>
+            <td>${p.market_type||'—'}</td>
+            <td><span class="pill ${p.direction==='BUY_YES'||p.direction==='BUY'?'pill-buy':'pill-sell'}">${p.direction||'—'}</span></td>
+            <td>${fmt(p.entry_price,3)}</td>
+            <td>
+                <span class="live-price">${fmt(p.current_price,3)}</span>
+                <span class="price-arrow ${arrowClass}">${arrow}</span>
+            </td>
+            <td>${fmt(p.size,1)}</td>
+            <td>${fmtD(p.stake_usd)}</td>
+            <td class="${pnlClass(pnl)}">
+                <span class="pnl-value">${fmtD(pnl)}</span>
+            </td>
+            <td class="${pnlClass(pnlPct)}">
+                <span class="pnl-badge ${pnl > 0 ? 'pnl-badge-pos' : pnl < 0 ? 'pnl-badge-neg' : 'pnl-badge-flat'}">${fmtP(pnlPct)}</span>
+            </td>
+            <td class="${arrowClass}">
+                ${fmtP(priceChangePct)}
+            </td>
+            <td title="${p.opened_at||''}">${timeLabel}</td>
+        </tr>`;
+    }).join(''));
 }
 
 // ─── Forecasts Table ────────────────────────────────────────────

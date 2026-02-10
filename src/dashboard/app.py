@@ -141,7 +141,11 @@ def api_portfolio() -> Any:
 
         # P&L (sum of closed position P&L via trades)
         filled = [t for t in all_trades if t["status"] == "FILLED"]
-        total_pnl = unrealized_pnl  # simplified
+        total_pnl = unrealized_pnl  # simplified — updates from live pricing
+
+        # Best / worst position
+        best_pnl = max((r["pnl"] or 0 for r in positions), default=0.0)
+        worst_pnl = min((r["pnl"] or 0 for r in positions), default=0.0)
 
         # Win rate from forecasts
         forecasts = conn.execute("SELECT * FROM forecasts").fetchall()
@@ -162,6 +166,8 @@ def api_portfolio() -> Any:
             "total_invested": total_invested,
             "unrealized_pnl": unrealized_pnl,
             "total_pnl": total_pnl,
+            "best_pnl": round(best_pnl, 4),
+            "worst_pnl": round(worst_pnl, 4),
             "open_positions": open_count,
             "total_trades": total_trades,
             "live_trades": len(live_trades),
@@ -194,14 +200,52 @@ def api_positions() -> Any:
             ORDER BY p.opened_at DESC
         """).fetchall()
         positions = []
+        total_pnl = 0.0
+        total_invested = 0.0
         for r in rows:
             rd = dict(r)
-            pnl_pct = 0.0
-            if rd.get("entry_price") and rd["entry_price"] > 0:
-                pnl_pct = ((rd.get("current_price", 0) - rd["entry_price"]) / rd["entry_price"]) * 100
+            pnl = rd.get("pnl") or 0.0
+            entry = rd.get("entry_price") or 0.0
+            current = rd.get("current_price") or 0.0
+            stake = rd.get("stake_usd") or 0.0
+
+            # PNL percentage based on stake invested
+            pnl_pct = (pnl / stake * 100) if stake > 0 else 0.0
             rd["pnl_pct"] = round(pnl_pct, 2)
+
+            # Price change from entry
+            price_change = current - entry
+            price_change_pct = (price_change / entry * 100) if entry > 0 else 0.0
+            rd["price_change"] = round(price_change, 4)
+            rd["price_change_pct"] = round(price_change_pct, 2)
+
+            # Time held
+            if rd.get("opened_at"):
+                try:
+                    opened = dt.datetime.fromisoformat(rd["opened_at"].replace("Z", "+00:00"))
+                    held = dt.datetime.now(dt.timezone.utc) - opened
+                    rd["hours_held"] = round(held.total_seconds() / 3600, 1)
+                except (ValueError, TypeError):
+                    rd["hours_held"] = 0
+            else:
+                rd["hours_held"] = 0
+
+            total_pnl += pnl
+            total_invested += stake
             positions.append(rd)
-        return jsonify({"positions": positions})
+
+        return jsonify({
+            "positions": positions,
+            "summary": {
+                "count": len(positions),
+                "total_pnl": round(total_pnl, 4),
+                "total_invested": round(total_invested, 2),
+                "pnl_pct": round(total_pnl / total_invested * 100, 2) if total_invested > 0 else 0.0,
+                "winners": sum(1 for p in positions if (p.get("pnl") or 0) > 0),
+                "losers": sum(1 for p in positions if (p.get("pnl") or 0) < 0),
+                "flat": sum(1 for p in positions if (p.get("pnl") or 0) == 0),
+            },
+        })
     finally:
         conn.close()
 

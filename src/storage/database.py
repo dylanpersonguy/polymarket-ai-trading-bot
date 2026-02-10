@@ -153,6 +153,11 @@ class Database:
         row = self.conn.execute("SELECT COUNT(*) FROM positions").fetchone()
         return int(row[0]) if row else 0
 
+    def get_open_positions(self) -> list[PositionRecord]:
+        """Return all open positions as PositionRecord objects."""
+        rows = self.conn.execute("SELECT * FROM positions").fetchall()
+        return [PositionRecord(**dict(r)) for r in rows]
+
     def upsert_position(self, pos: PositionRecord) -> None:
         self.conn.execute(
             """
@@ -166,6 +171,14 @@ class Database:
                 pos.entry_price, pos.size, pos.stake_usd,
                 pos.current_price, pos.pnl, pos.opened_at,
             ),
+        )
+        self.conn.commit()
+
+    def update_position_price(self, market_id: str, current_price: float, pnl: float) -> None:
+        """Update current price and PNL for a position."""
+        self.conn.execute(
+            "UPDATE positions SET current_price = ?, pnl = ? WHERE market_id = ?",
+            (current_price, pnl, market_id),
         )
         self.conn.commit()
 
@@ -257,8 +270,4 @@ class Database:
         rows = self.conn.execute(
             "SELECT * FROM trades ORDER BY created_at DESC LIMIT ?", (limit,)
         ).fetchall()
-        return [dict(r) for r in rows]
-
-    def get_open_positions(self) -> list[dict]:
-        rows = self.conn.execute("SELECT * FROM positions").fetchall()
         return [dict(r) for r in rows]
