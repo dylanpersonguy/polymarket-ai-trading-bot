@@ -322,6 +322,118 @@ async function updateCharts() {
     }
 }
 
+// ─── Engine & Drawdown ─────────────────────────────────────────
+async function updateEngineStatus() {
+    const d = await fetchJSON("/api/engine-status");
+    if (!d) return;
+
+    const badge = $("#engine-badge");
+    badge.style.display = "inline-block";
+    if (d.running) {
+        badge.textContent = "⚡ ENGINE ON";
+        badge.className = "badge badge-live";
+        $("#engine-status").textContent = "RUNNING";
+    } else {
+        badge.textContent = "ENGINE OFF";
+        badge.className = "badge badge-paper";
+        $("#engine-status").textContent = "OFF";
+    }
+    $("#engine-cycles").textContent = `Cycles: ${d.cycles || 0}`;
+}
+
+async function updateDrawdown() {
+    const d = await fetchJSON("/api/drawdown");
+    if (!d) return;
+
+    const ddPct = (d.drawdown_pct || 0) * 100;
+    $("#drawdown-pct").textContent = ddPct.toFixed(1) + "%";
+    $("#drawdown-pct").className = "card-value" + (ddPct > 15 ? " pnl-negative" : ddPct > 5 ? " pnl-zero" : "");
+    $("#drawdown-detail").textContent = `Peak: ${fmt$(d.peak_equity)} | Current: ${fmt$(d.current_equity)}`;
+
+    const heat = d.heat_level || 0;
+    const heatLabels = ["🟢 Cool", "🟡 Warm", "🟠 Hot", "🔴 Critical"];
+    const heatEl = $("#heat-level");
+    heatEl.textContent = heatLabels[Math.min(heat, 3)];
+    $("#kelly-mult").textContent = `Kelly multiplier: ${(d.kelly_multiplier || 1.0).toFixed(2)}x`;
+
+    // Kill switch buttons
+    if (d.is_killed) {
+        $("#kill-switch-status").textContent = "⛔ ON";
+        $("#kill-switch-status").className = "card-value pnl-negative";
+        $("#btn-kill-on").style.display = "none";
+        $("#btn-kill-off").style.display = "inline-block";
+    } else {
+        $("#kill-switch-status").textContent = "OFF";
+        $("#kill-switch-status").className = "card-value";
+        $("#btn-kill-on").style.display = "inline-block";
+        $("#btn-kill-off").style.display = "none";
+    }
+}
+
+async function toggleKillSwitch(activate) {
+    const r = await fetch("/api/kill-switch", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({activate}),
+    });
+    if (r.ok) {
+        await updateDrawdown();
+        await updateRisk();
+    }
+}
+
+// ─── Audit Trail ───────────────────────────────────────────────
+async function updateAudit() {
+    const d = await fetchJSON("/api/audit");
+    if (!d) return;
+    const tbody = $("#audit-body");
+
+    if (!d.entries || d.entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No audit entries</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = d.entries.slice(0, 20).map(e => {
+        const decClass = e.decision === "TRADE" ? "pill-trade" : e.decision === "EXIT" ? "pill-sell" : "pill-no-trade";
+        const details = e.data ? truncate(JSON.stringify(e.data), 60) : "—";
+        const ts = e.timestamp ? new Date(e.timestamp * 1000).toLocaleString() : "—";
+        return `
+        <tr>
+            <td style="font-family:var(--font-mono);font-size:0.7rem;">${(e.audit_id || "").slice(0, 16)}</td>
+            <td>${truncate(e.market_id || "", 20)}</td>
+            <td><span class="pill ${decClass}">${e.decision || "—"}</span></td>
+            <td>${e.stage || "—"}</td>
+            <td title="${details}">${details}</td>
+            <td>${e.checksum ? "✅" : "❌"}</td>
+            <td>${ts}</td>
+        </tr>`;
+    }).join("");
+}
+
+// ─── Alerts ────────────────────────────────────────────────────
+async function updateAlerts() {
+    const d = await fetchJSON("/api/alerts");
+    if (!d) return;
+    const tbody = $("#alerts-body");
+
+    if (!d.alerts || d.alerts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No alerts</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = d.alerts.slice(0, 15).map(a => {
+        const levelClass = a.level === "error" ? "pnl-negative" : a.level === "warning" ? "pnl-zero" : "";
+        const ts = a.timestamp ? new Date(a.timestamp * 1000).toLocaleString() : "—";
+        return `
+        <tr>
+            <td class="${levelClass}" style="text-transform:uppercase;font-weight:700;font-size:0.75rem;">${a.level || "info"}</td>
+            <td>${a.channel || "—"}</td>
+            <td>${truncate(a.message || "", 80)}</td>
+            <td>${ts}</td>
+        </tr>`;
+    }).join("");
+}
+
 // ─── Configuration Panel ───────────────────────────────────────
 async function updateConfig() {
     const d = await fetchJSON("/api/config");
@@ -359,10 +471,14 @@ async function refreshAll() {
     await Promise.all([
         updatePortfolio(),
         updateRisk(),
+        updateEngineStatus(),
+        updateDrawdown(),
         updatePositions(),
         updateForecasts(),
         updateTrades(),
         updateCharts(),
+        updateAudit(),
+        updateAlerts(),
         updateConfig(),
     ]);
     $("#last-updated-time").textContent = new Date().toLocaleTimeString();

@@ -205,6 +205,23 @@ tbody tr:hover { background: var(--bg-hover); }
 .pnl-negative { color: var(--accent-red); }
 .pnl-zero    { color: var(--text-muted); }
 
+/* ─── Buttons ──────────────────────────────────────────────────── */
+.btn {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 5px 12px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    transition: opacity 0.2s;
+}
+.btn:hover { opacity: 0.85; }
+.btn-danger { background: var(--accent-red); color: #fff; }
+.btn-ok     { background: var(--accent-green); color: #000; }
+
 /* ─── Config Grid ──────────────────────────────────────────────── */
 .config-grid {
     display: grid;

@@ -15,6 +15,7 @@
             <span class="subtitle">Research & Trading Dashboard</span>
         </div>
         <div class="header-right">
+            <span id="engine-badge" class="badge badge-paper" style="display:none;">ENGINE OFF</span>
             <span id="mode-badge" class="badge badge-paper">PAPER MODE</span>
             <span id="kill-switch-badge" class="badge badge-ok" style="display:none;">KILL SWITCH</span>
             <span class="last-updated">Updated: <span id="last-updated-time">—</span></span>
@@ -106,6 +107,33 @@
         <div class="risk-params" id="risk-params"></div>
     </section>
 
+    <!-- ─── Engine & Drawdown Status ────────────────────────── -->
+    <section class="card-grid" id="engine-cards">
+        <div class="card accent-teal">
+            <div class="card-label">Engine Status</div>
+            <div class="card-value" id="engine-status">OFF</div>
+            <div class="card-sub" id="engine-cycles">Cycles: 0</div>
+        </div>
+        <div class="card accent-pink">
+            <div class="card-label">Drawdown</div>
+            <div class="card-value" id="drawdown-pct">0.0%</div>
+            <div class="card-sub" id="drawdown-detail">Peak: $0 | Current: $0</div>
+        </div>
+        <div class="card accent-purple">
+            <div class="card-label">Heat Level</div>
+            <div class="card-value" id="heat-level">🟢 Cool</div>
+            <div class="card-sub" id="kelly-mult">Kelly multiplier: 1.0x</div>
+        </div>
+        <div class="card accent-orange">
+            <div class="card-label">Kill Switch</div>
+            <div class="card-value" id="kill-switch-status">OFF</div>
+            <div class="card-sub">
+                <button class="btn btn-danger" id="btn-kill-on" onclick="toggleKillSwitch(true)">Activate</button>
+                <button class="btn btn-ok" id="btn-kill-off" onclick="toggleKillSwitch(false)" style="display:none;">Deactivate</button>
+            </div>
+        </div>
+    </section>
+
     <!-- ─── Active Positions ────────────────────────────────── -->
     <section class="panel">
         <h2>💼 Active Positions</h2>
@@ -178,6 +206,49 @@
                 </thead>
                 <tbody id="trades-body">
                     <tr><td colspan="9" class="empty-state">No trades yet</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ─── Audit Log ───────────────────────────────────────── -->
+    <section class="panel">
+        <h2>🔒 Audit Trail</h2>
+        <div class="table-wrap">
+            <table id="audit-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Market</th>
+                        <th>Decision</th>
+                        <th>Stage</th>
+                        <th>Details</th>
+                        <th>Integrity</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody id="audit-body">
+                    <tr><td colspan="7" class="empty-state">No audit entries</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ─── Recent Alerts ───────────────────────────────────── -->
+    <section class="panel">
+        <h2>🔔 Recent Alerts</h2>
+        <div class="table-wrap">
+            <table id="alerts-table">
+                <thead>
+                    <tr>
+                        <th>Level</th>
+                        <th>Channel</th>
+                        <th>Message</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody id="alerts-body">
+                    <tr><td colspan="4" class="empty-state">No alerts</td></tr>
                 </tbody>
             </table>
         </div>
