@@ -11,6 +11,16 @@ let _charts = {};              // Chart.js instances
 const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
+// ─── Smart DOM Update (skip if unchanged) ───────────────────────
+function safeHTML(el, html) {
+    if (!el) return;
+    if (el.innerHTML === html) return;      // no-op if identical
+    el.innerHTML = html;
+}
+
+// ─── Expanded Decision Cards State ─────────────────────────────
+const _expandedDecisionKeys = new Set();   // "cycleId-marketId" keys
+
 // ─── Helpers ────────────────────────────────────────────────────
 const fmt  = (v, d=2) => Number(v||0).toFixed(d);
 const fmtD = (v) => `$${fmt(v)}`;
@@ -221,7 +231,7 @@ async function updateRisk() {
 
     // Risk params pills
     const params = $('#risk-params');
-    params.innerHTML = [
+    safeHTML(params, [
         ['Max Stake', fmtD(d.limits.max_stake_per_market)],
         ['Bankroll Frac', fmtP(d.limits.max_bankroll_fraction * 100)],
         ['Min Edge', fmtP(d.limits.min_edge * 100)],
@@ -230,7 +240,7 @@ async function updateRisk() {
         ['Max Spread', fmtP(d.limits.max_spread * 100)],
         ['Slippage Tol', fmtP(d.execution.slippage_tolerance * 100)],
         ['LLM Model', d.forecasting.llm_model || '—'],
-    ].map(([l,v]) => `<div class="risk-param"><div class="rp-label">${l}</div><div class="rp-value">${v}</div></div>`).join('');
+    ].map(([l,v]) => `<div class="risk-param"><div class="rp-label">${l}</div><div class="rp-value">${v}</div></div>`).join(''));
 }
 
 // ─── Positions Table ────────────────────────────────────────────
@@ -239,10 +249,10 @@ async function updatePositions() {
     if (!d) return;
     const tbody = $('#positions-body');
     if (!d.positions || d.positions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No active positions</td></tr>';
+        safeHTML(tbody, '<tr><td colspan="10" class="empty-state">No active positions</td></tr>');
         return;
     }
-    tbody.innerHTML = d.positions.map(p => `<tr>
+    safeHTML(tbody, d.positions.map(p => `<tr>
         <td title="${p.market_id}">${(p.question||p.market_id||'').substring(0,50)}</td>
         <td>${p.market_type||'—'}</td>
         <td><span class="pill ${p.direction==='BUY'?'pill-buy':'pill-sell'}">${p.direction||'—'}</span></td>
@@ -253,7 +263,7 @@ async function updatePositions() {
         <td class="${pnlClass(p.pnl)}">${fmtD(p.pnl)}</td>
         <td class="${pnlClass(p.pnl_pct)}">${fmtP(p.pnl_pct)}</td>
         <td>${shortDate(p.opened_at)}</td>
-    </tr>`).join('');
+    </tr>`).join(''));
 }
 
 // ─── Forecasts Table ────────────────────────────────────────────
@@ -262,10 +272,10 @@ async function updateForecasts() {
     if (!d) return;
     const tbody = $('#forecasts-body');
     if (!d.forecasts || d.forecasts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No forecasts yet</td></tr>';
+        safeHTML(tbody, '<tr><td colspan="10" class="empty-state">No forecasts yet</td></tr>');
         return;
     }
-    tbody.innerHTML = d.forecasts.map(f => `<tr>
+    safeHTML(tbody, d.forecasts.map(f => `<tr>
         <td title="${f.question||''}">${(f.question||f.market_id||'').substring(0,50)}</td>
         <td>${f.market_type||'—'}</td>
         <td>${fmtP((f.implied_probability||0)*100)}</td>
@@ -276,7 +286,7 @@ async function updateForecasts() {
         <td>${f.confidence_level||'—'}</td>
         <td><span class="pill ${pillClass(f.decision)}">${f.decision||'—'}</span></td>
         <td>${shortDate(f.created_at)}</td>
-    </tr>`).join('');
+    </tr>`).join(''));
 }
 
 // ─── Trades Table ───────────────────────────────────────────────
@@ -285,10 +295,10 @@ async function updateTrades() {
     if (!d) return;
     const tbody = $('#trades-body');
     if (!d.trades || d.trades.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No trades yet</td></tr>';
+        safeHTML(tbody, '<tr><td colspan="9" class="empty-state">No trades yet</td></tr>');
         return;
     }
-    tbody.innerHTML = d.trades.map(t => `<tr>
+    safeHTML(tbody, d.trades.map(t => `<tr>
         <td title="${t.question||''}">${(t.question||t.market_id||'').substring(0,50)}</td>
         <td>${t.market_type||'—'}</td>
         <td><span class="pill ${t.side==='BUY'?'pill-buy':'pill-sell'}">${t.side||'—'}</span></td>
@@ -298,7 +308,7 @@ async function updateTrades() {
         <td><span class="pill ${pillClass(t.status)}">${t.status||'—'}</span></td>
         <td>${t.dry_run ? '🧪 Paper' : '💰 Live'}</td>
         <td>${shortDate(t.created_at)}</td>
-    </tr>`).join('');
+    </tr>`).join(''));
 }
 
 // ─── Audit Trail ────────────────────────────────────────────────
@@ -307,10 +317,10 @@ async function updateAudit() {
     if (!d) return;
     const tbody = $('#audit-body');
     if (!d.entries || d.entries.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No audit entries</td></tr>';
+        safeHTML(tbody, '<tr><td colspan="7" class="empty-state">No audit entries</td></tr>');
         return;
     }
-    tbody.innerHTML = d.entries.map(e => `<tr>
+    safeHTML(tbody, d.entries.map(e => `<tr>
         <td style="font-family:var(--font-mono);font-size:0.72rem;">${(e.id||'').substring(0,8)}</td>
         <td>${(e.market_id||'').substring(0,20)}</td>
         <td><span class="pill ${pillClass(e.decision)}">${e.decision||'—'}</span></td>
@@ -318,7 +328,7 @@ async function updateAudit() {
         <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${e.details||''}">${(e.details||'—').substring(0,60)}</td>
         <td>${e.integrity_hash ? '✅' : '—'}</td>
         <td>${shortDate(e.timestamp)}</td>
-    </tr>`).join('');
+    </tr>`).join(''));
 }
 
 // ─── Alerts ─────────────────────────────────────────────────────
@@ -327,7 +337,7 @@ async function updateAlerts() {
     if (!d) return;
     const tbody = $('#alerts-body');
     if (!d.alerts || d.alerts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No alerts</td></tr>';
+        safeHTML(tbody, '<tr><td colspan="4" class="empty-state">No alerts</td></tr>');
         return;
     }
     const levelClass = (l) => {
@@ -335,12 +345,12 @@ async function updateAlerts() {
         return ll === 'critical' || ll === 'error' ? 'pnl-negative' :
                ll === 'warning' ? 'accent-orange' : '';
     };
-    tbody.innerHTML = d.alerts.map(a => `<tr>
+    safeHTML(tbody, d.alerts.map(a => `<tr>
         <td class="${levelClass(a.level)}" style="font-weight:700;text-transform:uppercase">${a.level||'info'}</td>
         <td>${a.channel||'—'}</td>
         <td>${a.message||'—'}</td>
         <td>${shortDate(a.timestamp || a.created_at)}</td>
-    </tr>`).join('');
+    </tr>`).join(''));
 }
 
 // ─── Pipeline Candidates ────────────────────────────────────────
@@ -349,10 +359,10 @@ async function updateCandidates() {
     if (!d) return;
     const tbody = $('#candidates-body');
     if (!d.candidates || d.candidates.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="13" class="empty-state">No candidates processed yet</td></tr>';
+        safeHTML(tbody, '<tr><td colspan="13" class="empty-state">No candidates processed yet</td></tr>');
         return;
     }
-    tbody.innerHTML = d.candidates.map(c => {
+    safeHTML(tbody, d.candidates.map(c => {
         const decClass = (c.decision||'').toUpperCase() === 'TRADE' ? 'pill-trade' :
                          (c.decision||'').toUpperCase() === 'NO TRADE' ? 'pill-no-trade' : 'pill-dry';
         return `<tr>
@@ -370,7 +380,7 @@ async function updateCandidates() {
             <td title="${c.decision_reasons||''}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${(c.decision_reasons||'—').substring(0,40)}</td>
             <td>${shortDate(c.created_at)}</td>
         </tr>`;
-    }).join('');
+    }).join(''));
 }
 
 // ─── Engine & Drawdown Cards ────────────────────────────────────
@@ -578,8 +588,14 @@ const CONFIG_SECTION_LABELS = {
 async function updateConfig() {
     const data = await apiFetch('/api/config');
     if (!data) return;
+
+    // Skip re-render if user has unsaved edits (don't blow away their changes)
+    if (Object.keys(_configDirty).length > 0) return;
+
+    // Skip re-render if data hasn't changed
+    if (JSON.stringify(data) === JSON.stringify(_configData)) return;
+
     _configData = data;
-    _configDirty = {};
     renderConfigTabs();
     renderConfigSection(_activeConfigTab || Object.keys(data)[0]);
 }
@@ -749,6 +765,10 @@ async function resetConfig() {
 
 let _decisionExpanded = false;
 
+function _decisionKey(entry) {
+    return `${entry.cycle_id||0}-${entry.market_id||''}`;
+}
+
 async function updateDecisionLog() {
     const cycleFilter = $('#decision-cycle-filter');
     const cycleVal = cycleFilter ? cycleFilter.value : '';
@@ -759,19 +779,59 @@ async function updateDecisionLog() {
     // Populate cycle selector (preserve current selection)
     if (d.cycles && d.cycles.length > 0 && cycleFilter) {
         const cur = cycleFilter.value;
-        const opts = '<option value="">All Cycles</option>' +
+        const newOpts = '<option value="">All Cycles</option>' +
             d.cycles.map(c => `<option value="${c}" ${String(c)===cur?'selected':''}>Cycle ${c}</option>`).join('');
-        cycleFilter.innerHTML = opts;
+        safeHTML(cycleFilter, newOpts);
     }
 
     const container = $('#decision-log-container');
     if (!d.entries || d.entries.length === 0) {
-        container.innerHTML = '<div class="empty-state" style="padding:40px 0;">No decision data yet — run an engine cycle to see how the bot makes decisions.</div>';
+        safeHTML(container, '<div class="empty-state" style="padding:40px 0;">No decision data yet — run an engine cycle to see how the bot makes decisions.</div>');
         return;
     }
 
-    container.innerHTML = d.entries.map((e, idx) => renderDecisionCard(e, idx)).join('');
+    // Build new HTML and check if data actually changed
+    const newHTML = d.entries.map((e, idx) => renderDecisionCard(e, idx)).join('');
+
+    // Compare stripped content to decide if DOM needs updating
+    // (we strip display:none/block and expand icons since those are UI state)
+    const normalize = (h) => h.replace(/style="display:(none|block);?"/g, '').replace(/▶|▼/g, '');
+    if (normalize(container.innerHTML) === normalize(newHTML)) {
+        return;  // data unchanged, keep current DOM state (expanded cards, etc.)
+    }
+
+    // Data changed — save expanded state, rebuild, restore
+    _saveExpandedState();
+    container.innerHTML = newHTML;
+    _restoreExpandedState(d.entries);
     filterDecisionCards();
+}
+
+function _saveExpandedState() {
+    // Persist which cards are currently expanded (don't clear the set,
+    // user-toggled state carries across refreshes)
+    document.querySelectorAll('.decision-card').forEach(card => {
+        const key = card.dataset.decisionKey;
+        if (!key) return;
+        const detail = card.querySelector('.dc-detail');
+        if (detail && detail.style.display !== 'none') {
+            _expandedDecisionKeys.add(key);
+        } else {
+            _expandedDecisionKeys.delete(key);
+        }
+    });
+}
+
+function _restoreExpandedState(entries) {
+    entries.forEach((entry, idx) => {
+        const key = _decisionKey(entry);
+        if (_expandedDecisionKeys.has(key) || _decisionExpanded) {
+            const detail = document.getElementById(`dc-detail-${idx}`);
+            const icon = document.getElementById(`dc-expand-${idx}`);
+            if (detail) detail.style.display = 'block';
+            if (icon) icon.textContent = '▼';
+        }
+    });
 }
 
 function renderDecisionCard(entry, idx) {
@@ -813,7 +873,8 @@ function renderDecisionCard(entry, idx) {
     // Expanded detail
     const detail = renderDecisionDetail(entry, idx);
 
-    return `<div class="decision-card ${decClass}" data-decision="${decision}" data-idx="${idx}">
+    const stableKey = _decisionKey(entry);
+    return `<div class="decision-card ${decClass}" data-decision="${decision}" data-idx="${idx}" data-decision-key="${stableKey}">
         ${summary}
         <div class="dc-detail" id="dc-detail-${idx}" style="display:none;">${detail}</div>
     </div>`;
@@ -972,6 +1033,13 @@ function toggleDecisionDetail(idx) {
     const open = detail.style.display !== 'none';
     detail.style.display = open ? 'none' : 'block';
     if (icon) icon.textContent = open ? '▶' : '▼';
+
+    // Persist expanded state by stable key
+    const card = detail.closest('.decision-card');
+    if (card && card.dataset.decisionKey) {
+        if (open) _expandedDecisionKeys.delete(card.dataset.decisionKey);
+        else      _expandedDecisionKeys.add(card.dataset.decisionKey);
+    }
 }
 
 function toggleDecisionExpand() {
@@ -1002,6 +1070,8 @@ function filterDecisionCards() {
 // ═══════════════════════════════════════════════════════════════
 
 async function refreshAll() {
+    const scrollY = window.scrollY;                    // preserve scroll
+
     await Promise.all([
         updatePortfolio(),
         updateRisk(),
@@ -1019,6 +1089,8 @@ async function refreshAll() {
         updateConfig(),
     ]);
     $('#last-updated-time').textContent = new Date().toLocaleTimeString();
+
+    requestAnimationFrame(() => window.scrollTo(0, scrollY));  // restore scroll
 }
 
 // ─── Init ───────────────────────────────────────────────────────
