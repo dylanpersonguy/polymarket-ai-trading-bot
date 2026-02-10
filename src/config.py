@@ -203,6 +203,7 @@ class EngineConfig(BaseModel):
     max_markets_per_cycle: int = 20
     auto_start: bool = False
     paper_mode: bool = True
+    cycle_interval_secs: int = 300  # 5 minutes between full cycles
 
 
 class BotConfig(BaseModel):
