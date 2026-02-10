@@ -8,6 +8,7 @@ and get basic pricing snapshots.
 from __future__ import annotations
 
 import datetime as dt
+import json
 from typing import Any
 
 import httpx
@@ -77,9 +78,17 @@ class GammaMarket(BaseModel):
 
     @property
     def best_bid(self) -> float:
-        """Highest Yes-token price (proxy for implied probability)."""
+        """Highest Yes-token price (proxy for implied probability).
+
+        Falls back to the first token's price if no 'Yes' outcome exists.
+        """
         yes_tokens = [t for t in self.tokens if t.outcome.lower() == "yes"]
-        return yes_tokens[0].price if yes_tokens else 0.0
+        if yes_tokens:
+            return yes_tokens[0].price
+        # For non-Yes/No markets, use the first token's price
+        if self.tokens:
+            return self.tokens[0].price
+        return 0.0
 
     @property
     def spread(self) -> float:
@@ -194,11 +203,33 @@ async def fetch_active_markets(
 
 # ── Parsing helpers ──────────────────────────────────────────────────
 
+def _parse_json_str(val: Any) -> list[Any]:
+    """Parse a JSON-encoded string or return as-is if already a list."""
+    if isinstance(val, list):
+        return val
+    if isinstance(val, str):
+        try:
+            parsed = json.loads(val)
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return []
+
+
 def parse_market(raw: dict[str, Any]) -> GammaMarket:
     """Convert a raw Gamma JSON blob into a GammaMarket."""
     tokens: list[GammaToken] = []
-    for tok in raw.get("tokens", raw.get("outcomes", [])):
-        if isinstance(tok, dict):
+
+    # The Gamma list endpoint returns tokens data as JSON strings:
+    #   outcomes:      '["Yes", "No"]'
+    #   outcomePrices: '["0.55", "0.45"]'
+    #   clobTokenIds:  '["123...", "456..."]'
+    # The single-market endpoint may return a proper tokens array.
+    raw_tokens = raw.get("tokens", [])
+    if isinstance(raw_tokens, list) and raw_tokens and isinstance(raw_tokens[0], dict):
+        # Already structured token objects (single-market endpoint)
+        for tok in raw_tokens:
             tokens.append(
                 GammaToken(
                     token_id=str(tok.get("token_id", tok.get("id", ""))),
@@ -207,8 +238,22 @@ def parse_market(raw: dict[str, Any]) -> GammaMarket:
                     winner=tok.get("winner"),
                 )
             )
-        elif isinstance(tok, str):
-            tokens.append(GammaToken(outcome=tok))
+    else:
+        # List endpoint — reconstruct tokens from separate JSON string fields
+        outcomes = _parse_json_str(raw.get("outcomes", []))
+        prices = _parse_json_str(raw.get("outcomePrices", []))
+        clob_ids = _parse_json_str(raw.get("clobTokenIds", []))
+
+        for i, outcome in enumerate(outcomes):
+            price = float(prices[i]) if i < len(prices) else 0.0
+            token_id = str(clob_ids[i]) if i < len(clob_ids) else ""
+            tokens.append(
+                GammaToken(
+                    token_id=token_id,
+                    outcome=str(outcome),
+                    price=price,
+                )
+            )
 
     end_raw = raw.get("end_date_iso") or raw.get("end_date") or raw.get("endDate")
     end_date = None

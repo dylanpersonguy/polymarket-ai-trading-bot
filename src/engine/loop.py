@@ -458,6 +458,12 @@ class TradingEngine:
 
         yes_tokens = [t for t in market.tokens if t.outcome.lower() == "yes"]
         no_tokens = [t for t in market.tokens if t.outcome.lower() == "no"]
+        # For non-Yes/No markets, treat first token as "yes", second as "no"
+        if not yes_tokens and not no_tokens and len(market.tokens) >= 2:
+            yes_tokens = [market.tokens[0]]
+            no_tokens = [market.tokens[1]]
+        elif not yes_tokens and market.tokens:
+            yes_tokens = [market.tokens[0]]
         if edge_result.direction == "BUY_YES" and yes_tokens:
             token_id = yes_tokens[0].token_id
             implied_price = yes_tokens[0].price or forecast.implied_probability

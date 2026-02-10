@@ -70,7 +70,7 @@ class TestParseMarket:
             ],
         }
         market = parse_market(raw)
-        assert market.best_bid == 0.0  # No "Yes" token
+        assert market.best_bid == 0.40  # Falls back to first token's price
 
     def test_parse_market_string_outcomes(self) -> None:
         """Handle the case where outcomes are just strings, not dicts."""
@@ -83,6 +83,30 @@ class TestParseMarket:
         assert len(market.tokens) == 2
         assert market.tokens[0].outcome == "Candidate A"
         assert market.tokens[0].price == 0.0
+
+    def test_parse_market_gamma_json_string_format(self) -> None:
+        """Handle the real Gamma API list endpoint format where fields are JSON strings."""
+        raw = {
+            "id": "12345",
+            "question": "Will XYZ happen?",
+            "outcomes": '["Yes", "No"]',
+            "outcomePrices": '["0.65", "0.35"]',
+            "clobTokenIds": '["abc123", "def456"]',
+            "conditionId": "0xabc",
+            "volume": "5000",
+            "liquidity": "2000",
+            "endDate": "2026-06-01T00:00:00Z",
+        }
+        market = parse_market(raw)
+        assert len(market.tokens) == 2
+        assert market.tokens[0].outcome == "Yes"
+        assert market.tokens[0].price == 0.65
+        assert market.tokens[0].token_id == "abc123"
+        assert market.tokens[1].outcome == "No"
+        assert market.tokens[1].price == 0.35
+        assert market.tokens[1].token_id == "def456"
+        assert market.best_bid == 0.65
+        assert market.condition_id == "0xabc"
 
     def test_parse_market_missing_fields(self) -> None:
         """Gracefully handle minimal data."""

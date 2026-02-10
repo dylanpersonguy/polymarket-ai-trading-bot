@@ -124,6 +124,17 @@ def build_features(
             features.implied_probability = yes_price
     elif yes_tokens:
         features.implied_probability = yes_tokens[0].price
+    elif len(market.tokens) >= 2:
+        # Non-Yes/No market — use first token as the "positive" outcome
+        first_price = market.tokens[0].price
+        second_price = market.tokens[1].price
+        total = first_price + second_price
+        if total > 0:
+            features.implied_probability = first_price / total
+        else:
+            features.implied_probability = first_price
+    elif market.tokens:
+        features.implied_probability = market.tokens[0].price
     else:
         features.implied_probability = market.best_bid
 
