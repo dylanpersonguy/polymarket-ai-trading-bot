@@ -363,6 +363,134 @@ def api_metrics() -> Any:
     return jsonify(snapshot)
 
 
+# ─── API: Drawdown State ──────────────────────────────────────────
+
+@app.route("/api/drawdown")
+def api_drawdown() -> Any:
+    cfg = _get_config()
+    return jsonify({
+        "peak_equity": cfg.risk.bankroll,
+        "current_equity": cfg.risk.bankroll,
+        "drawdown_pct": 0.0,
+        "heat_level": 0,
+        "kelly_multiplier": 1.0,
+        "is_killed": False,
+        "kill_switch_pct": cfg.drawdown.auto_kill_switch_pct,
+        "heat_levels": cfg.drawdown.heat_levels,
+        "heat_multipliers": cfg.drawdown.heat_kelly_multipliers,
+        "max_drawdown_pct": cfg.drawdown.max_drawdown_pct,
+    })
+
+
+# ─── API: Portfolio Risk ─────────────────────────────────────────
+
+@app.route("/api/portfolio-risk")
+def api_portfolio_risk() -> Any:
+    cfg = _get_config()
+    return jsonify({
+        "max_exposure_per_category": cfg.portfolio.max_exposure_per_type,
+        "max_exposure_per_event": cfg.portfolio.max_exposure_per_event,
+        "max_correlated_positions": cfg.portfolio.max_correlated_positions,
+        "correlation_threshold": cfg.portfolio.correlation_threshold,
+        "category_exposures": {},
+        "event_exposures": {},
+        "is_healthy": True,
+        "violations": [],
+    })
+
+
+# ─── API: Engine Status ─────────────────────────────────────────
+
+@app.route("/api/engine")
+def api_engine() -> Any:
+    cfg = _get_config()
+    return jsonify({
+        "running": False,
+        "cycle_interval_secs": cfg.engine.cycle_interval_secs,
+        "max_markets_per_cycle": cfg.engine.max_markets_per_cycle,
+        "enable_continuous": cfg.engine.enable_continuous,
+        "total_cycles": 0,
+        "last_cycle": None,
+    })
+
+
+# ─── API: Alerts History ────────────────────────────────────────
+
+@app.route("/api/alerts")
+def api_alerts() -> Any:
+    return jsonify({"alerts": []})
+
+
+# ─── API: Audit Trail ───────────────────────────────────────────
+
+@app.route("/api/audit")
+def api_audit() -> Any:
+    conn = _get_conn()
+    try:
+        # Check if audit_trail table exists
+        tables = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='audit_trail'"
+        ).fetchone()
+        if not tables:
+            return jsonify({"entries": [], "summary": {"total_entries": 0}})
+
+        rows = conn.execute(
+            "SELECT * FROM audit_trail ORDER BY timestamp DESC LIMIT 50"
+        ).fetchall()
+        entries = [dict(r) for r in rows]
+        return jsonify({
+            "entries": entries,
+            "summary": {"total_entries": len(entries)},
+        })
+    finally:
+        conn.close()
+
+
+# ─── API: Kill Switch Toggle ────────────────────────────────────
+
+@app.route("/api/kill-switch", methods=["POST"])
+def api_kill_switch() -> Any:
+    """Toggle kill switch (for dashboard button)."""
+    cfg = _get_config()
+    # In production this would persist to config file
+    current = cfg.risk.kill_switch
+    # Note: this only affects the in-memory config
+    cfg.risk.kill_switch = not current
+    return jsonify({
+        "kill_switch": cfg.risk.kill_switch,
+        "message": f"Kill switch {'ENGAGED' if cfg.risk.kill_switch else 'DISENGAGED'}",
+    })
+
+
+# ─── API: Execution Quality ─────────────────────────────────────
+
+@app.route("/api/execution-quality")
+def api_execution_quality() -> Any:
+    conn = _get_conn()
+    try:
+        tables = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='fill_records'"
+        ).fetchone()
+        if not tables:
+            return jsonify({
+                "total_orders": 0,
+                "avg_fill_rate": 0,
+                "avg_slippage_bps": 0,
+                "strategy_stats": {},
+            })
+
+        rows = conn.execute(
+            "SELECT * FROM fill_records ORDER BY timestamp DESC LIMIT 100"
+        ).fetchall()
+        fills = [dict(r) for r in rows]
+        return jsonify({
+            "total_orders": len(fills),
+            "fills": fills[:20],
+        })
+    finally:
+        conn.close()
+
+
 # ─── API: Configuration Summary ────────────────────────────────────
 
 @app.route("/api/config")

@@ -5,7 +5,8 @@ Orchestrates:
   2. Filtering out blocked domains
   3. De-duplicating results across queries
   4. Scoring sources by authority (primary > secondary > unknown)
-  5. Optionally fetching full page content for top sources
+  5. Fetching FULL page content for top sources (not just snippets)
+  6. Extracting readable text via BeautifulSoup
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ log = get_logger(__name__)
 
 @dataclass
 class FetchedSource:
-    """A source with full metadata and optionally fetched content."""
+    """A source with full metadata and fetched content."""
     title: str
     url: str
     snippet: str
@@ -42,7 +43,8 @@ class FetchedSource:
     content: str = ""           # full page text (if fetched)
     authority_score: float = 0.0
     query_intent: str = ""
-    extraction_method: str = "search"  # "search" | "api" | "html" | "rss"
+    extraction_method: str = "search"  # "search" | "html" | "api"
+    content_length: int = 0
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -55,7 +57,7 @@ class SourceFetcher:
         self._http = httpx.AsyncClient(
             timeout=config.source_timeout_secs,
             follow_redirects=True,
-            headers={"User-Agent": "PolymarketBot/0.1 (research)"},
+            headers={"User-Agent": "Mozilla/5.0 (compatible; PolymarketBot/0.2)"},
         )
 
     async def close(self) -> None:
@@ -67,12 +69,11 @@ class SourceFetcher:
         market_type: str = "UNKNOWN",
         max_sources: int | None = None,
     ) -> list[FetchedSource]:
-        """Run all queries, filter, de-dup, rank, and return top sources."""
+        """Run all queries, filter, de-dup, rank, fetch content, return top sources."""
         max_sources = max_sources or self._config.max_sources
         seen_urls: set[str] = set()
         all_sources: list[FetchedSource] = []
 
-        # Resolve primary domains for this market type
         primary = self._config.primary_domains.get(market_type, [])
         secondary = self._config.secondary_domains
         blocked = self._config.blocked_domains
@@ -90,9 +91,7 @@ class SourceFetcher:
                 )
                 continue
             for sr in results:
-                # Block bad domains
                 if is_domain_blocked(sr.url, blocked):
-                    log.debug("source_fetcher.blocked", url=sr.url)
                     continue
 
                 canonical = _canonical_url(sr.url)
@@ -115,20 +114,39 @@ class SourceFetcher:
                     )
                 )
 
-        # Sort: authority desc, then intent priority (primary > news > contrarian)
-        intent_order = {"primary": 0, "statistics": 1, "news": 2, "confirmation": 3, "contrarian": 4}
+        # Sort: authority desc, then intent priority
+        intent_order = {
+            "primary": 0, "statistics": 1, "news": 2,
+            "confirmation": 3, "contrarian": 4,
+        }
         all_sources.sort(
             key=lambda s: (-s.authority_score, intent_order.get(s.query_intent, 5)),
         )
         top = all_sources[:max_sources]
 
+        # Fetch full page content for top N sources
+        if self._config.fetch_full_content:
+            fetch_n = min(self._config.content_fetch_top_n, len(top))
+            content_tasks = [
+                self.fetch_page_content(src.url) for src in top[:fetch_n]
+            ]
+            contents = await asyncio.gather(*content_tasks, return_exceptions=True)
+            for i, content in enumerate(contents):
+                if isinstance(content, str) and content:
+                    top[i].content = content
+                    top[i].content_length = len(content)
+                    top[i].extraction_method = "html"
+                    log.debug(
+                        "source_fetcher.content_fetched",
+                        url=top[i].url[:80],
+                        length=len(content),
+                    )
+
         log.info(
             "source_fetcher.fetched",
             total_raw=len(all_sources),
             returned=len(top),
-            blocked_count=sum(
-                1 for _ in []  # logged above individually
-            ),
+            with_content=sum(1 for s in top if s.content),
         )
         return top
 
@@ -136,19 +154,51 @@ class SourceFetcher:
         return await self._provider.search(query.text, num_results=8)
 
     async def fetch_page_content(self, url: str) -> str:
-        """Fetch and extract text content from a URL."""
+        """Fetch and extract readable text content from a URL using BeautifulSoup."""
         try:
             resp = await self._http.get(url)
             resp.raise_for_status()
-            text = resp.text
-            # Basic tag stripping (production would use readability)
-            text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.DOTALL)
-            text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
-            text = re.sub(r"<[^>]+>", " ", text)
-            text = re.sub(r"\s+", " ", text).strip()
-            return text[:10000]
+            html = resp.text
+
+            # Try BeautifulSoup for better extraction
+            try:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(html, "lxml")
+
+                # Remove noise elements
+                for tag in soup(["script", "style", "nav", "footer", "header",
+                                 "aside", "noscript", "iframe", "svg"]):
+                    tag.decompose()
+
+                # Try to find main content
+                main = (
+                    soup.find("article")
+                    or soup.find("main")
+                    or soup.find(class_=re.compile(r"article|content|post|entry", re.I))
+                    or soup.find("body")
+                )
+                if main:
+                    text = main.get_text(separator="\n", strip=True)
+                else:
+                    text = soup.get_text(separator="\n", strip=True)
+
+            except ImportError:
+                # Fallback to regex stripping
+                text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL)
+                text = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL)
+                text = re.sub(r"<[^>]+>", " ", text)
+                text = re.sub(r"\s+", " ", text).strip()
+
+            # Clean up whitespace
+            lines = [line.strip() for line in text.split("\n")]
+            lines = [line for line in lines if len(line) > 20]  # Remove short noise lines
+            text = "\n".join(lines)
+
+            max_len = self._config.max_content_length
+            return text[:max_len]
+
         except Exception as e:
-            log.warning("source_fetcher.page_fetch_failed", url=url, error=str(e))
+            log.warning("source_fetcher.page_fetch_failed", url=url[:80], error=str(e))
             return ""
 
 

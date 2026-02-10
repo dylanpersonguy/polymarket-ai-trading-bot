@@ -83,7 +83,9 @@ class TestParseEvidenceFromRaw:
         )
 
         assert package.market_id == "test_123"
-        assert package.quality_score == 0.9
+        assert package.llm_quality_score == 0.9
+        # Final quality is blended: 0.4 * LLM + 0.6 * independent
+        assert 0.8 <= package.quality_score <= 1.0
         assert len(package.bullets) == 2
         assert package.bullets[0].text == "CPI-U increased 3.1% YoY in January 2026"
         assert package.bullets[0].is_numeric is True
@@ -128,7 +130,9 @@ class TestParseEvidenceFromRaw:
         assert package.contradictions[0].claim_a == "CPI was 3.1%"
         assert package.contradictions[0].source_a.publisher == "Bureau of Labor Statistics"
         assert package.contradictions[0].claim_b == "CPI was 2.8%"
-        assert package.quality_score == 0.5
+        assert package.llm_quality_score == 0.5
+        # Blended score: LLM says 0.5, independent evaluator may score higher
+        assert package.quality_score < 0.8
 
     def test_out_of_range_source_index(self) -> None:
         """Handle source_index that's out of range."""
@@ -205,7 +209,8 @@ class TestParseEvidenceFromRaw:
 
         d = package.to_dict()
         assert d["market_id"] == "test_dict"
-        assert d["quality_score"] == 0.85
+        # Blended quality score (0.4*LLM + 0.6*independent)
+        assert 0.8 <= d["quality_score"] <= 0.9
         assert len(d["evidence"]) == 1
         assert d["evidence"][0]["metric_name"] == "CPI"
         assert d["evidence"][0]["citation"]["url"] == "https://www.bls.gov/news.release/cpi.nr0.htm"

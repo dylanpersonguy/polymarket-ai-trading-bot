@@ -6,6 +6,13 @@ Commands:
   bot forecast --market   — Produce a forecast for a market
   bot paper-trade --days  — Run paper trading simulation
   bot trade --live        — Live trading (requires ENABLE_LIVE_TRADING=true)
+  bot engine start        — Start the continuous trading engine
+  bot engine status       — Show engine status
+  bot portfolio           — Show portfolio risk report
+  bot drawdown            — Show drawdown state
+  bot alerts              — Show recent alerts
+  bot arbitrage           — Scan for arbitrage opportunities
+  bot dashboard           — Launch the monitoring dashboard web UI
 """
 
 from __future__ import annotations
@@ -414,6 +421,177 @@ def dashboard(ctx: click.Context, host: str, port: int, debug: bool) -> None:
         port=port,
         debug=debug,
     )
+
+
+# ─── ENGINE ──────────────────────────────────────────────────────
+
+@cli.group()
+def engine() -> None:
+    """Continuous trading engine commands."""
+    pass
+
+
+@engine.command()
+@click.pass_context
+def start(ctx: click.Context) -> None:
+    """Start the continuous trading engine."""
+    cfg: BotConfig = ctx.obj["config"]
+
+    console.print("[bold cyan]🤖 Starting Continuous Trading Engine[/bold cyan]")
+    console.print(f"  Cycle interval: {cfg.engine.cycle_interval_secs}s")
+    console.print(f"  Max markets/cycle: {cfg.engine.max_markets_per_cycle}")
+    console.print(f"  Live trading: {is_live_trading_enabled()}")
+    console.print(f"  Bankroll: ${cfg.risk.bankroll:,.2f}")
+    console.print()
+
+    if cfg.risk.kill_switch:
+        console.print("[red]❌ Kill switch is ON. Engine will not trade.[/red]")
+
+    async def _run_engine() -> None:
+        from src.engine.loop import TradingEngine
+
+        eng = TradingEngine(config=cfg)
+        try:
+            await eng.start()
+        except KeyboardInterrupt:
+            eng.stop()
+            console.print("\n[yellow]Engine stopped by user.[/yellow]")
+
+    _run(_run_engine())
+
+
+@engine.command()
+@click.pass_context
+def status(ctx: click.Context) -> None:
+    """Show engine status summary."""
+    console.print("[bold]📊 Engine Status[/bold]")
+    console.print("Engine status is available on the dashboard at localhost:2345")
+
+
+# ─── PORTFOLIO ───────────────────────────────────────────────────
+
+@cli.command()
+@click.pass_context
+def portfolio(ctx: click.Context) -> None:
+    """Show portfolio risk report."""
+    cfg: BotConfig = ctx.obj["config"]
+
+    from src.policy.portfolio_risk import PortfolioRiskManager
+    from src.storage.database import Database
+
+    db = Database(cfg.storage)
+    db.connect()
+
+    manager = PortfolioRiskManager(cfg.risk.bankroll, cfg)
+    # In a real scenario, positions would be loaded from DB
+    report = manager.assess([])
+
+    table = Table(title="📊 Portfolio Risk Report")
+    table.add_column("Metric", style="bold")
+    table.add_column("Value", justify="right")
+
+    table.add_row("Total Exposure", f"${report.total_exposure_usd:,.2f}")
+    table.add_row("Open Positions", str(report.num_positions))
+    table.add_row("Unrealised P&L", f"${report.total_unrealised_pnl:,.2f}")
+    table.add_row("Largest Position", f"{report.largest_position_pct:.1%}")
+    table.add_row("Portfolio Healthy", "✅" if report.is_healthy else "❌")
+
+    if report.category_violations:
+        for v in report.category_violations:
+            table.add_row("[red]Category Violation[/red]", v)
+    if report.event_violations:
+        for v in report.event_violations:
+            table.add_row("[red]Event Violation[/red]", v)
+
+    console.print(table)
+    db.close()
+
+
+# ─── DRAWDOWN ────────────────────────────────────────────────────
+
+@cli.command()
+@click.pass_context
+def drawdown(ctx: click.Context) -> None:
+    """Show current drawdown state."""
+    cfg: BotConfig = ctx.obj["config"]
+
+    from src.policy.drawdown import DrawdownManager
+
+    manager = DrawdownManager(cfg.risk.bankroll, cfg)
+    state = manager.state
+
+    table = Table(title="📉 Drawdown State")
+    table.add_column("Metric", style="bold")
+    table.add_column("Value", justify="right")
+
+    table.add_row("Peak Equity", f"${state.peak_equity:,.2f}")
+    table.add_row("Current Equity", f"${state.current_equity:,.2f}")
+    table.add_row("Drawdown", f"{state.drawdown_pct:.1%}")
+    table.add_row("Drawdown USD", f"${state.drawdown_usd:,.2f}")
+    table.add_row("Heat Level", str(state.heat_level))
+    table.add_row("Kelly Multiplier", f"{state.kelly_multiplier:.2f}")
+    table.add_row(
+        "Kill Switch",
+        "[red]ENGAGED[/red]" if state.is_killed else "[green]OFF[/green]",
+    )
+
+    console.print(table)
+
+
+# ─── ARBITRAGE ───────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--limit", default=50, help="Number of markets to scan")
+@click.pass_context
+def arbitrage(ctx: click.Context, limit: int) -> None:
+    """Scan for arbitrage opportunities across markets."""
+    cfg: BotConfig = ctx.obj["config"]
+
+    async def _scan() -> list[dict]:
+        from src.connectors.polymarket_gamma import GammaClient
+        from src.policy.arbitrage import detect_arbitrage
+
+        gamma = GammaClient()
+        try:
+            markets = await gamma.list_markets(limit=limit, active=True)
+            opportunities = detect_arbitrage(markets)
+            return [o.to_dict() for o in opportunities]
+        finally:
+            await gamma.close()
+
+    opps = _run(_scan())
+
+    if not opps:
+        console.print("[yellow]No arbitrage opportunities found.[/yellow]")
+        return
+
+    table = Table(title=f"🔀 Arbitrage Opportunities ({len(opps)} found)")
+    table.add_column("Type", style="cyan")
+    table.add_column("Edge", justify="right", style="green")
+    table.add_column("Actionable", justify="center")
+    table.add_column("Description", max_width=60)
+
+    for o in opps[:20]:
+        table.add_row(
+            o["arb_type"],
+            f"{o['arb_edge']:.3f}",
+            "✅" if o["is_actionable"] else "❌",
+            o["description"][:60],
+        )
+
+    console.print(table)
+
+
+# ─── ALERTS ──────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--limit", default=20, help="Number of alerts to show")
+@click.pass_context
+def alerts(ctx: click.Context, limit: int) -> None:
+    """Show recent alerts."""
+    console.print("[bold]🔔 Recent Alerts[/bold]")
+    console.print("Alert history is available on the dashboard at localhost:2345")
+    console.print("Configure alert channels in config.yaml under 'alerts'")
 
 
 if __name__ == "__main__":

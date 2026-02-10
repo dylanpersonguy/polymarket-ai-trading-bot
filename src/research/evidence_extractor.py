@@ -7,6 +7,12 @@ Uses an LLM to:
   4. Assess overall evidence quality
   5. Determine confidence score
 
+ALSO performs independent quality scoring (not just LLM self-assessment):
+  - Source recency penalty
+  - Domain authority weighting
+  - Cross-source agreement scoring
+  - Numeric evidence density bonus
+
 Implements strict extraction rules:
   - ONLY extract: numbers, official statements, dates, direct quotes
   - Every fact must have: metric name, value, unit, date, source, URL
@@ -16,12 +22,14 @@ Implements strict extraction rules:
 from __future__ import annotations
 
 import json
+import re
+import datetime as dt
 from dataclasses import dataclass, field
 from typing import Any
 
 from openai import AsyncOpenAI
 
-from src.config import ForecastingConfig
+from src.config import ForecastingConfig, ResearchConfig
 from src.observability.logger import get_logger
 from src.research.source_fetcher import FetchedSource
 
@@ -42,7 +50,7 @@ class EvidenceBullet:
     """A single piece of evidence with citation."""
     text: str
     citation: Citation
-    relevance: float = 0.0   # 0-1 scale
+    relevance: float = 0.0
     is_numeric: bool = False
     metric_name: str = ""
     metric_value: str = ""
@@ -62,6 +70,18 @@ class Contradiction:
 
 
 @dataclass
+class IndependentQualityScore:
+    """Quality score computed independently of LLM self-assessment."""
+    overall: float = 0.0
+    recency_score: float = 0.0
+    authority_score: float = 0.0
+    agreement_score: float = 0.0
+    numeric_density_score: float = 0.0
+    content_depth_score: float = 0.0
+    breakdown: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass
 class EvidencePackage:
     """Complete evidence package for a market."""
     market_id: str
@@ -69,7 +89,11 @@ class EvidencePackage:
     market_type: str = "UNKNOWN"
     bullets: list[EvidenceBullet] = field(default_factory=list)
     contradictions: list[Contradiction] = field(default_factory=list)
-    quality_score: float = 0.0   # 0-1 scale
+    quality_score: float = 0.0
+    llm_quality_score: float = 0.0
+    independent_quality: IndependentQualityScore = field(
+        default_factory=IndependentQualityScore
+    )
     num_sources: int = 0
     summary: str = ""
     raw_llm_response: dict[str, Any] = field(default_factory=dict)
@@ -110,9 +134,120 @@ class EvidencePackage:
                 for c in self.contradictions
             ],
             "quality_score": self.quality_score,
+            "llm_quality_score": self.llm_quality_score,
+            "independent_quality": {
+                "overall": self.independent_quality.overall,
+                "recency": self.independent_quality.recency_score,
+                "authority": self.independent_quality.authority_score,
+                "agreement": self.independent_quality.agreement_score,
+                "numeric_density": self.independent_quality.numeric_density_score,
+                "content_depth": self.independent_quality.content_depth_score,
+            },
             "num_sources": self.num_sources,
             "summary": self.summary,
         }
+
+
+def compute_independent_quality(
+    sources: list[FetchedSource],
+    bullets: list[EvidenceBullet],
+    contradictions: list[Contradiction],
+    stale_threshold_days: int = 7,
+    heavy_stale_days: int = 30,
+) -> IndependentQualityScore:
+    """Compute evidence quality independently of LLM self-assessment.
+
+    Scoring dimensions:
+      1. Recency: are sources recent? (penalty for stale data)
+      2. Authority: weighted average of source authority scores
+      3. Agreement: do multiple sources agree? (contradiction penalty)
+      4. Numeric density: more numbers = more verifiable = higher quality
+      5. Content depth: did we get full content or just snippets?
+    """
+    if not sources:
+        return IndependentQualityScore()
+
+    now = dt.datetime.now(dt.timezone.utc)
+
+    # 1. Recency score
+    recency_scores = []
+    for src in sources:
+        if src.date:
+            try:
+                # Try various date formats
+                date_str = src.date.strip()
+                src_date = None
+                for fmt in ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%b %d, %Y", "%B %d, %Y"]:
+                    try:
+                        src_date = dt.datetime.strptime(date_str[:19], fmt)
+                        src_date = src_date.replace(tzinfo=dt.timezone.utc)
+                        break
+                    except ValueError:
+                        continue
+                if src_date:
+                    age_days = (now - src_date).days
+                    if age_days <= stale_threshold_days:
+                        recency_scores.append(1.0)
+                    elif age_days <= heavy_stale_days:
+                        recency_scores.append(0.5)
+                    else:
+                        recency_scores.append(0.2)
+                else:
+                    recency_scores.append(0.4)  # Unknown date
+            except Exception:
+                recency_scores.append(0.4)
+        else:
+            recency_scores.append(0.4)
+    recency = sum(recency_scores) / len(recency_scores) if recency_scores else 0.4
+
+    # 2. Authority score (weighted avg)
+    auth_scores = [src.authority_score for src in sources if src.authority_score > 0]
+    authority = sum(auth_scores) / len(auth_scores) if auth_scores else 0.3
+    # Bonus if any .gov or top-tier source
+    has_gov = any(s.authority_score >= 0.95 for s in sources)
+    if has_gov:
+        authority = min(1.0, authority + 0.15)
+
+    # 3. Agreement score
+    n_contradictions = len(contradictions)
+    n_sources = len(sources)
+    agreement = 1.0
+    if n_contradictions > 0:
+        agreement = max(0.2, 1.0 - (n_contradictions * 0.15))
+
+    # 4. Numeric density
+    n_numeric = sum(1 for b in bullets if b.is_numeric)
+    n_bullets = len(bullets) if bullets else 1
+    numeric_density = min(1.0, n_numeric / max(n_bullets, 1) + 0.2 * min(n_numeric, 5))
+
+    # 5. Content depth (full content vs snippets only)
+    sources_with_content = sum(1 for s in sources if len(s.content) > 500)
+    content_depth = min(1.0, sources_with_content / max(n_sources, 1) * 1.5)
+
+    # Overall = weighted combination
+    overall = (
+        recency * 0.20
+        + authority * 0.30
+        + agreement * 0.20
+        + numeric_density * 0.15
+        + content_depth * 0.15
+    )
+
+    return IndependentQualityScore(
+        overall=round(overall, 3),
+        recency_score=round(recency, 3),
+        authority_score=round(authority, 3),
+        agreement_score=round(agreement, 3),
+        numeric_density_score=round(numeric_density, 3),
+        content_depth_score=round(content_depth, 3),
+        breakdown={
+            "recency_weight": 0.20,
+            "authority_weight": 0.30,
+            "agreement_weight": 0.20,
+            "numeric_weight": 0.15,
+            "depth_weight": 0.15,
+        },
+    )
 
 
 _EXTRACTION_PROMPT = """\
@@ -193,16 +328,17 @@ class EvidenceExtractor:
                 summary="No sources available for analysis.",
             )
 
-        # Build sources block
+        # Build sources block — include full content if available
         source_lines: list[str] = []
         for i, s in enumerate(sources):
+            content_text = s.content[:3000] if s.content else s.snippet[:500]
             source_lines.append(
                 f"[{i}] {s.title}\n"
                 f"    URL: {s.url}\n"
                 f"    Publisher: {s.publisher}\n"
                 f"    Date: {s.date or 'unknown'}\n"
                 f"    Authority: {s.authority_score:.1f}\n"
-                f"    Snippet: {s.snippet[:500]}"
+                f"    Content: {content_text}"
             )
         sources_block = "\n\n".join(source_lines)
 
@@ -229,7 +365,6 @@ class EvidenceExtractor:
                 ],
             )
             raw_text = resp.choices[0].message.content or "{}"
-            # Strip markdown code fences if present
             raw_text = raw_text.strip()
             if raw_text.startswith("```"):
                 raw_text = raw_text.split("\n", 1)[1] if "\n" in raw_text else raw_text[3:]
@@ -258,7 +393,7 @@ def _build_package(
     sources: list[FetchedSource],
     parsed: dict[str, Any],
 ) -> EvidencePackage:
-    """Build an EvidencePackage from parsed LLM output."""
+    """Build an EvidencePackage from parsed LLM output with independent quality."""
     bullets: list[EvidenceBullet] = []
     for b in parsed.get("bullets", []):
         idx = b.get("source_index", 0)
@@ -307,13 +442,27 @@ def _build_package(
             )
         )
 
+    # LLM's own quality assessment
+    llm_quality = float(parsed.get("quality_score", 0.0))
+
+    # Independent quality scoring
+    independent = compute_independent_quality(
+        sources, bullets, contradictions,
+    )
+
+    # Final quality = blend of LLM assessment and independent scoring
+    # Independent scoring gets more weight (60/40 split)
+    final_quality = llm_quality * 0.4 + independent.overall * 0.6
+
     package = EvidencePackage(
         market_id=market_id,
         question=question,
         market_type=market_type,
         bullets=bullets,
         contradictions=contradictions,
-        quality_score=float(parsed.get("quality_score", 0.0)),
+        quality_score=round(final_quality, 3),
+        llm_quality_score=llm_quality,
+        independent_quality=independent,
         num_sources=len(sources),
         summary=parsed.get("summary", ""),
         raw_llm_response=parsed,
@@ -324,7 +473,9 @@ def _build_package(
         market_id=market_id,
         bullets=len(bullets),
         contradictions=len(contradictions),
-        quality=package.quality_score,
+        llm_quality=llm_quality,
+        independent_quality=independent.overall,
+        final_quality=final_quality,
     )
     return package
 

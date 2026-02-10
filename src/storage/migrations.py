@@ -8,7 +8,7 @@ from src.observability.logger import get_logger
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -89,6 +89,127 @@ _MIGRATIONS: dict[int, list[str]] = {
         """,
         """
         CREATE INDEX IF NOT EXISTS idx_forecasts_created ON forecasts(created_at);
+        """,
+    ],
+    2: [
+        # Audit trail table
+        """
+        CREATE TABLE IF NOT EXISTS audit_trail (
+            id TEXT PRIMARY KEY,
+            timestamp REAL NOT NULL,
+            market_id TEXT,
+            decision TEXT,
+            stage TEXT,
+            data_json TEXT,
+            checksum TEXT
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_trail(timestamp);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_audit_market ON audit_trail(market_id);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_audit_decision ON audit_trail(decision);
+        """,
+
+        # Calibration history
+        """
+        CREATE TABLE IF NOT EXISTS calibration_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            forecast_prob REAL NOT NULL,
+            actual_outcome REAL NOT NULL,
+            recorded_at REAL NOT NULL,
+            market_id TEXT
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_calibration_recorded ON calibration_history(recorded_at);
+        """,
+
+        # Fill tracking
+        """
+        CREATE TABLE IF NOT EXISTS fill_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id TEXT NOT NULL,
+            market_id TEXT,
+            expected_price REAL,
+            fill_price REAL,
+            size_ordered REAL,
+            size_filled REAL,
+            slippage_bps REAL,
+            time_to_fill_secs REAL,
+            execution_strategy TEXT,
+            timestamp REAL
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_fills_order ON fill_records(order_id);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_fills_market ON fill_records(market_id);
+        """,
+
+        # Enhanced positions table with more tracking fields
+        """
+        CREATE TABLE IF NOT EXISTS positions_v2 (
+            market_id TEXT PRIMARY KEY,
+            question TEXT,
+            category TEXT,
+            event_slug TEXT,
+            side TEXT,
+            size_usd REAL,
+            entry_price REAL,
+            entry_time REAL,
+            current_price REAL DEFAULT 0,
+            unrealised_pnl REAL DEFAULT 0,
+            realised_pnl REAL DEFAULT 0,
+            status TEXT DEFAULT 'open',
+            exit_time REAL DEFAULT 0,
+            exit_price REAL DEFAULT 0,
+            exit_reason TEXT DEFAULT '',
+            entry_model_prob REAL DEFAULT 0,
+            entry_edge REAL DEFAULT 0,
+            entry_confidence TEXT DEFAULT 'LOW',
+            stop_loss_price REAL DEFAULT 0,
+            take_profit_price REAL DEFAULT 0,
+            max_unrealised_pnl REAL DEFAULT 0,
+            min_unrealised_pnl REAL DEFAULT 0
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_posv2_status ON positions_v2(status);
+        """,
+
+        # Drawdown state
+        """
+        CREATE TABLE IF NOT EXISTS drawdown_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp REAL NOT NULL,
+            equity REAL,
+            peak_equity REAL,
+            drawdown_pct REAL,
+            heat_level INTEGER
+        );
+        """,
+
+        # Event triggers
+        """
+        CREATE TABLE IF NOT EXISTS event_triggers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            market_id TEXT,
+            trigger_type TEXT,
+            severity TEXT,
+            details TEXT,
+            timestamp REAL
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_events_market ON event_triggers(market_id);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_events_timestamp ON event_triggers(timestamp);
         """,
     ],
 }
