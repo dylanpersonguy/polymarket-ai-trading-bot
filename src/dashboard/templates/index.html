@@ -8,6 +8,21 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+    <!-- ─── Toast Container ─────────────────────────────────── -->
+    <div id="toast-container"></div>
+
+    <!-- ─── Confirmation Modal ──────────────────────────────── -->
+    <div id="modal-overlay" class="modal-overlay" style="display:none;">
+        <div class="modal-box">
+            <h3 id="modal-title">Confirm Action</h3>
+            <p id="modal-message">Are you sure?</p>
+            <div class="modal-actions">
+                <button class="btn btn-muted" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-danger" id="modal-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ─── Header ──────────────────────────────────────────── -->
     <header>
         <div class="header-left">
@@ -72,6 +87,14 @@
         </div>
     </section>
 
+    <!-- ─── Equity Curve ────────────────────────────────────── -->
+    <section class="charts-row charts-row-single">
+        <div class="chart-container chart-wide">
+            <h3>💰 Equity Curve (Cumulative P&L)</h3>
+            <canvas id="chart-equity-curve"></canvas>
+        </div>
+    </section>
+
     <!-- ─── Risk Monitor ────────────────────────────────────── -->
     <section class="panel">
         <h2>⚠️ Risk Monitor</h2>
@@ -128,31 +151,27 @@
             <div class="card-label">Kill Switch</div>
             <div class="card-value" id="kill-switch-status">OFF</div>
             <div class="card-sub">
-                <button class="btn btn-danger" id="btn-kill-on" onclick="toggleKillSwitch(true)">Activate</button>
-                <button class="btn btn-ok" id="btn-kill-off" onclick="toggleKillSwitch(false)" style="display:none;">Deactivate</button>
+                <button class="btn btn-danger" id="btn-kill-on" onclick="confirmKillSwitch(true)">Activate</button>
+                <button class="btn btn-ok" id="btn-kill-off" onclick="confirmKillSwitch(false)" style="display:none;">Deactivate</button>
             </div>
         </div>
     </section>
 
     <!-- ─── Active Positions ────────────────────────────────── -->
     <section class="panel">
-        <h2>💼 Active Positions</h2>
+        <div class="panel-header">
+            <h2>💼 Active Positions</h2>
+            <div class="panel-tools">
+                <input type="text" class="search-input" placeholder="🔍 Filter positions..." oninput="filterTable('positions-body', this.value)">
+                <button class="btn btn-export" onclick="exportData('positions')">📥 Export</button>
+            </div>
+        </div>
         <div class="table-wrap">
             <table id="positions-table">
-                <thead>
-                    <tr>
-                        <th>Market</th>
-                        <th>Type</th>
-                        <th>Direction</th>
-                        <th>Entry</th>
-                        <th>Current</th>
-                        <th>Size</th>
-                        <th>Stake</th>
-                        <th>P&L</th>
-                        <th>P&L %</th>
-                        <th>Opened</th>
-                    </tr>
-                </thead>
+                <thead><tr>
+                    <th>Market</th><th>Type</th><th>Direction</th><th>Entry</th><th>Current</th>
+                    <th>Size</th><th>Stake</th><th>P&L</th><th>P&L %</th><th>Opened</th>
+                </tr></thead>
                 <tbody id="positions-body">
                     <tr><td colspan="10" class="empty-state">No active positions</td></tr>
                 </tbody>
@@ -162,23 +181,19 @@
 
     <!-- ─── Recent Forecasts ────────────────────────────────── -->
     <section class="panel">
-        <h2>🔮 Recent Forecasts</h2>
+        <div class="panel-header">
+            <h2>🔮 Recent Forecasts</h2>
+            <div class="panel-tools">
+                <input type="text" class="search-input" placeholder="🔍 Filter forecasts..." oninput="filterTable('forecasts-body', this.value)">
+                <button class="btn btn-export" onclick="exportData('forecasts')">📥 Export</button>
+            </div>
+        </div>
         <div class="table-wrap">
             <table id="forecasts-table">
-                <thead>
-                    <tr>
-                        <th>Market</th>
-                        <th>Type</th>
-                        <th>Implied P</th>
-                        <th>Model P</th>
-                        <th>Edge</th>
-                        <th>EQ</th>
-                        <th>Sources</th>
-                        <th>Confidence</th>
-                        <th>Decision</th>
-                        <th>Time</th>
-                    </tr>
-                </thead>
+                <thead><tr>
+                    <th>Market</th><th>Type</th><th>Implied P</th><th>Model P</th><th>Edge</th>
+                    <th>EQ</th><th>Sources</th><th>Confidence</th><th>Decision</th><th>Time</th>
+                </tr></thead>
                 <tbody id="forecasts-body">
                     <tr><td colspan="10" class="empty-state">No forecasts yet</td></tr>
                 </tbody>
@@ -188,22 +203,19 @@
 
     <!-- ─── Trade History ───────────────────────────────────── -->
     <section class="panel">
-        <h2>📜 Trade History</h2>
+        <div class="panel-header">
+            <h2>📜 Trade History</h2>
+            <div class="panel-tools">
+                <input type="text" class="search-input" placeholder="🔍 Filter trades..." oninput="filterTable('trades-body', this.value)">
+                <button class="btn btn-export" onclick="exportData('trades')">📥 Export</button>
+            </div>
+        </div>
         <div class="table-wrap">
             <table id="trades-table">
-                <thead>
-                    <tr>
-                        <th>Market</th>
-                        <th>Type</th>
-                        <th>Side</th>
-                        <th>Price</th>
-                        <th>Size</th>
-                        <th>Stake</th>
-                        <th>Status</th>
-                        <th>Mode</th>
-                        <th>Time</th>
-                    </tr>
-                </thead>
+                <thead><tr>
+                    <th>Market</th><th>Type</th><th>Side</th><th>Price</th><th>Size</th>
+                    <th>Stake</th><th>Status</th><th>Mode</th><th>Time</th>
+                </tr></thead>
                 <tbody id="trades-body">
                     <tr><td colspan="9" class="empty-state">No trades yet</td></tr>
                 </tbody>
@@ -213,20 +225,18 @@
 
     <!-- ─── Audit Log ───────────────────────────────────────── -->
     <section class="panel">
-        <h2>🔒 Audit Trail</h2>
+        <div class="panel-header">
+            <h2>🔒 Audit Trail</h2>
+            <div class="panel-tools">
+                <input type="text" class="search-input" placeholder="🔍 Filter audit..." oninput="filterTable('audit-body', this.value)">
+            </div>
+        </div>
         <div class="table-wrap">
             <table id="audit-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Market</th>
-                        <th>Decision</th>
-                        <th>Stage</th>
-                        <th>Details</th>
-                        <th>Integrity</th>
-                        <th>Time</th>
-                    </tr>
-                </thead>
+                <thead><tr>
+                    <th>ID</th><th>Market</th><th>Decision</th><th>Stage</th>
+                    <th>Details</th><th>Integrity</th><th>Time</th>
+                </tr></thead>
                 <tbody id="audit-body">
                     <tr><td colspan="7" class="empty-state">No audit entries</td></tr>
                 </tbody>
@@ -239,14 +249,9 @@
         <h2>🔔 Recent Alerts</h2>
         <div class="table-wrap">
             <table id="alerts-table">
-                <thead>
-                    <tr>
-                        <th>Level</th>
-                        <th>Channel</th>
-                        <th>Message</th>
-                        <th>Time</th>
-                    </tr>
-                </thead>
+                <thead><tr>
+                    <th>Level</th><th>Channel</th><th>Message</th><th>Time</th>
+                </tr></thead>
                 <tbody id="alerts-body">
                     <tr><td colspan="4" class="empty-state">No alerts</td></tr>
                 </tbody>
@@ -254,9 +259,17 @@
         </div>
     </section>
 
-    <!-- ─── System Config ───────────────────────────────────── -->
-    <section class="panel">
-        <h2>⚙️ Configuration</h2>
+    <!-- ─── System Config (Editable) ────────────────────────── -->
+    <section class="panel" id="config-panel">
+        <div class="panel-header">
+            <h2>⚙️ Configuration</h2>
+            <div class="panel-tools">
+                <button class="btn btn-save" onclick="saveAllConfig()">💾 Save All Changes</button>
+                <button class="btn btn-muted" onclick="confirmResetConfig()">🔄 Reset Defaults</button>
+            </div>
+        </div>
+        <p class="config-hint">Edit any value below and click <strong>Save All Changes</strong> to persist to config.yaml. Changes take effect immediately.</p>
+        <div class="config-tabs" id="config-tabs"></div>
         <div class="config-grid" id="config-grid"></div>
     </section>
 

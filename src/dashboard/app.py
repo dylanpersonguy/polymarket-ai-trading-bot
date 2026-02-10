@@ -19,7 +19,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, render_template, send_from_directory
+from flask import Flask, jsonify, render_template, request, send_from_directory
+
+import yaml
 
 from src.config import BotConfig, load_config, is_live_trading_enabled
 from src.observability.metrics import metrics
@@ -27,6 +29,7 @@ from src.observability.metrics import metrics
 # ─── Flask app ──────────────────────────────────────────────────────
 
 _here = Path(__file__).resolve().parent
+_PROJECT_ROOT = _here.parent.parent
 app = Flask(
     __name__,
     template_folder=str(_here / "templates"),
@@ -492,36 +495,118 @@ def api_execution_quality() -> Any:
         conn.close()
 
 
-# ─── API: Configuration Summary ────────────────────────────────────
+# ─── API: Configuration (Full — all sections) ─────────────────────
 
 @app.route("/api/config")
 def api_config() -> Any:
     cfg = _get_config()
     return jsonify({
-        "scanning": {
-            "min_volume_usd": cfg.scanning.min_volume_usd,
-            "min_liquidity_usd": cfg.scanning.min_liquidity_usd,
-            "preferred_types": cfg.scanning.preferred_types,
-            "restricted_types": cfg.scanning.restricted_types,
-        },
-        "research": {
-            "search_provider": cfg.research.search_provider,
-            "max_sources": cfg.research.max_sources,
-            "blocked_domains_count": len(cfg.research.blocked_domains),
-        },
-        "forecasting": {
-            "llm_model": cfg.forecasting.llm_model,
-            "min_evidence_quality": cfg.forecasting.min_evidence_quality,
-            "calibration_method": cfg.forecasting.calibration_method,
-        },
-        "risk": cfg.risk.dict(),
-        "execution": {
-            "dry_run": cfg.execution.dry_run,
-            "live_trading_enabled": is_live_trading_enabled(),
-            "order_type": cfg.execution.default_order_type,
-            "slippage_tolerance": cfg.execution.slippage_tolerance,
-        },
+        "scanning": cfg.scanning.model_dump(),
+        "research": cfg.research.model_dump(),
+        "forecasting": cfg.forecasting.model_dump(),
+        "ensemble": cfg.ensemble.model_dump(),
+        "risk": cfg.risk.model_dump(),
+        "drawdown": cfg.drawdown.model_dump(),
+        "portfolio": cfg.portfolio.model_dump(),
+        "timeline": cfg.timeline.model_dump(),
+        "microstructure": cfg.microstructure.model_dump(),
+        "execution": cfg.execution.model_dump(),
+        "cache": cfg.cache.model_dump(),
+        "engine": cfg.engine.model_dump(),
+        "alerts": cfg.alerts.model_dump(),
+        "observability": cfg.observability.model_dump(),
     })
+
+
+# ─── API: Save Configuration ──────────────────────────────────────
+
+_CONFIG_PATH: Path = _PROJECT_ROOT / "config.yaml"
+
+@app.route("/api/config", methods=["POST"])
+def api_config_save() -> Any:
+    """Validate and save config changes to config.yaml, then hot-reload."""
+    global _config
+    data = request.get_json(force=True)
+    if not data or not isinstance(data, dict):
+        return jsonify({"ok": False, "error": "Invalid JSON body"}), 400
+
+    try:
+        # Load current config as dict, merge changes
+        if _CONFIG_PATH.exists():
+            with open(_CONFIG_PATH) as f:
+                current_raw: dict[str, Any] = yaml.safe_load(f) or {}
+        else:
+            current_raw = {}
+
+        # Deep-merge incoming sections into current raw config
+        for section, values in data.items():
+            if isinstance(values, dict):
+                if section not in current_raw:
+                    current_raw[section] = {}
+                current_raw[section].update(values)
+            else:
+                current_raw[section] = values
+
+        # Validate with Pydantic (raises if invalid)
+        new_config = BotConfig(**current_raw)
+
+        # Write to YAML
+        _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(_CONFIG_PATH, "w") as f:
+            yaml.dump(
+                current_raw,
+                f,
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+            )
+
+        # Hot-reload in memory
+        _config = new_config
+
+        return jsonify({
+            "ok": True,
+            "message": "Configuration saved and reloaded",
+            "sections_updated": list(data.keys()),
+        })
+    except Exception as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+        }), 422
+
+
+# ─── API: Reset Configuration ─────────────────────────────────────
+
+@app.route("/api/config/reset", methods=["POST"])
+def api_config_reset() -> Any:
+    """Reset config to defaults (delete config.yaml), reload."""
+    global _config
+    try:
+        if _CONFIG_PATH.exists():
+            _CONFIG_PATH.unlink()
+        _config = BotConfig()
+        return jsonify({"ok": True, "message": "Configuration reset to defaults"})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+# ─── API: Export Data ──────────────────────────────────────────────
+
+@app.route("/api/export/<table_name>")
+def api_export(table_name: str) -> Any:
+    """Export table data as JSON (for CSV conversion on client)."""
+    allowed = {"forecasts", "trades", "positions", "markets"}
+    if table_name not in allowed:
+        return jsonify({"error": f"Unknown table: {table_name}"}), 404
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        rows = conn.execute(f"SELECT * FROM {table_name} ORDER BY rowid DESC").fetchall()
+        data = [dict(r) for r in rows]
+        return jsonify({"table": table_name, "count": len(data), "rows": data})
+    finally:
+        conn.close()
 
 
 # ─── Runner ────────────────────────────────────────────────────────

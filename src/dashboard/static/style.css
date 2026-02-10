@@ -7,7 +7,9 @@
     --bg-panel: #161922;
     --bg-table-row: #1e2130;
     --bg-hover: #252838;
+    --bg-input: #1e2130;
     --border: #2a2d3a;
+    --border-focus: #4c8dff;
     --text: #e4e6f0;
     --text-dim: #8b8fa3;
     --text-muted: #5a5e72;
@@ -107,6 +109,9 @@ header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
     gap: 16px;
     margin-bottom: 24px;
 }
+.charts-row-single {
+    grid-template-columns: 1fr;
+}
 .chart-container {
     background: var(--bg-card);
     border-radius: var(--radius);
@@ -114,6 +119,7 @@ header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
 }
 .chart-container h3 { font-size: 0.9rem; margin-bottom: 12px; font-weight: 600; }
 .chart-container canvas { width: 100% !important; max-height: 240px; }
+.chart-wide canvas { max-height: 280px; }
 
 /* ─── Panel ────────────────────────────────────────────────────── */
 .panel {
@@ -124,6 +130,39 @@ header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
     border: 1px solid var(--border);
 }
 .panel h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.panel-header h2 { margin-bottom: 0; }
+.panel-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ─── Search Input ─────────────────────────────────────────────── */
+.search-input {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.78rem;
+    padding: 6px 12px;
+    width: 200px;
+    transition: border-color 0.2s;
+}
+.search-input:focus {
+    outline: none;
+    border-color: var(--border-focus);
+}
+.search-input::placeholder { color: var(--text-muted); }
 
 /* ─── Risk Monitor ─────────────────────────────────────────────── */
 .risk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 16px; }
@@ -210,23 +249,280 @@ tbody tr:hover { background: var(--bg-hover); }
     display: inline-block;
     font-size: 0.72rem;
     font-weight: 700;
-    padding: 5px 12px;
-    border-radius: 4px;
+    padding: 6px 14px;
+    border-radius: 6px;
     border: none;
     cursor: pointer;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    transition: opacity 0.2s;
+    transition: opacity 0.2s, transform 0.1s;
 }
-.btn:hover { opacity: 0.85; }
+.btn:hover { opacity: 0.85; transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
 .btn-danger { background: var(--accent-red); color: #fff; }
 .btn-ok     { background: var(--accent-green); color: #000; }
+.btn-save   { background: var(--accent-blue); color: #fff; }
+.btn-muted  { background: var(--bg-card); color: var(--text-dim); border: 1px solid var(--border); }
+.btn-export { background: var(--bg-card); color: var(--accent-teal); border: 1px solid var(--border); font-size: 0.7rem; padding: 5px 10px; }
+.btn-export:hover { border-color: var(--accent-teal); }
+.btn-sm { font-size: 0.68rem; padding: 4px 10px; }
 
-/* ─── Config Grid ──────────────────────────────────────────────── */
-.config-grid {
+/* ─── Toast Notifications ──────────────────────────────────────── */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    pointer-events: auto;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: opacity 0.3s, transform 0.3s;
+    max-width: 380px;
+}
+.toast-show {
+    opacity: 1;
+    transform: translateX(0);
+}
+.toast-hide {
+    opacity: 0;
+    transform: translateX(100%);
+}
+.toast-icon { font-size: 1.1rem; }
+.toast-msg { flex: 1; }
+
+.toast-success { border-left: 4px solid var(--accent-green); }
+.toast-error   { border-left: 4px solid var(--accent-red); }
+.toast-info    { border-left: 4px solid var(--accent-blue); }
+.toast-warning { border-left: 4px solid var(--accent-orange); }
+
+/* ─── Confirmation Modal ──────────────────────────────────────── */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+}
+.modal-box {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+}
+.modal-box h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+.modal-box p {
+    color: var(--text-dim);
+    font-size: 0.88rem;
+    margin-bottom: 24px;
+    line-height: 1.5;
+}
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* ─── Config Editor ────────────────────────────────────────────── */
+.config-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    line-height: 1.5;
+}
+.config-hint strong { color: var(--accent-blue); }
+
+/* Config Tabs */
+.config-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+.config-tab {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.config-tab:hover {
+    border-color: var(--accent-blue);
+    color: var(--text);
+}
+.config-tab-active {
+    background: rgba(76,141,255,0.15);
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
+.config-tab-dirty {
+    position: relative;
+}
+.config-tab-dirty::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-orange);
+}
+
+/* Config Editor Panel */
+.config-editor {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 20px;
+    border: 1px solid var(--border);
+}
+.config-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+.config-section-header h3 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--accent-blue);
+}
+.config-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.config-field-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: 240px 1fr;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(42, 45, 58, 0.3);
     gap: 16px;
+}
+.config-field-row:last-child { border-bottom: none; }
+.config-field-label {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: default;
+}
+.config-field-input {
+    display: flex;
+    align-items: center;
+}
+
+/* Config Inputs */
+.config-input {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    padding: 7px 12px;
+    width: 180px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.config-input:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 2px rgba(76,141,255,0.15);
+}
+.config-input-wide { width: 100%; max-width: 400px; }
+.config-textarea {
+    width: 100%;
+    max-width: 400px;
+    font-size: 0.75rem;
+    resize: vertical;
+    min-height: 60px;
+}
+input[type="number"].config-input { width: 120px; }
+
+/* Toggle Switch */
+.toggle-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+.toggle-switch input { display: none; }
+.toggle-slider {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    background: var(--bg-table-row);
+    border-radius: 11px;
+    border: 1px solid var(--border);
+    transition: background 0.3s;
+}
+.toggle-slider::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: transform 0.3s, background 0.3s;
+}
+.toggle-switch input:checked + .toggle-slider {
+    background: rgba(0,214,143,0.2);
+    border-color: var(--accent-green);
+}
+.toggle-switch input:checked + .toggle-slider::after {
+    transform: translateX(18px);
+    background: var(--accent-green);
+}
+.toggle-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    color: var(--text-dim);
+}
+
+/* Old config grid (kept for backwards compat) */
+.config-grid {
+    /* overridden by config-editor when active */
 }
 .config-section {
     background: var(--bg-card);
@@ -266,6 +562,7 @@ footer {
 @media (max-width: 1100px) {
     .charts-row { grid-template-columns: 1fr 1fr; }
     .chart-container.chart-small { grid-column: span 2; }
+    .config-field-row { grid-template-columns: 180px 1fr; }
 }
 @media (max-width: 768px) {
     body { padding: 0 12px 24px; }
@@ -273,4 +570,10 @@ footer {
     .card-grid { grid-template-columns: repeat(2, 1fr); }
     .charts-row { grid-template-columns: 1fr; }
     .chart-container.chart-small { grid-column: span 1; }
+    .panel-header { flex-direction: column; align-items: flex-start; }
+    .panel-tools { width: 100%; }
+    .search-input { width: 100%; }
+    .config-field-row { grid-template-columns: 1fr; gap: 4px; }
+    .config-tabs { gap: 4px; }
+    .config-tab { font-size: 0.65rem; padding: 5px 8px; }
 }

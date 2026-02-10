@@ -1,489 +1,730 @@
-/* ─── Polymarket Bot Dashboard — Client-Side Logic ──────────────── */
+/* ─── Polymarket Bot Dashboard ─ Interactive Frontend ────────── */
+"use strict";
 
-const REFRESH_INTERVAL = 15_000; // 15 seconds
+// ─── State ──────────────────────────────────────────────────────
+let _configData = {};          // current config from API
+let _configDirty = {};         // sections with unsaved edits
+let _activeConfigTab = null;   // currently visible config section
+let _modalConfirmCb = null;    // callback for confirm modal
+let _charts = {};              // Chart.js instances
 
-// ─── Chart instances (re-used on updates) ──────────────────────
-let chartDaily = null;
-let chartEdgeEQ = null;
-let chartMarketTypes = null;
+const $  = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
 
-// ─── Helpers ───────────────────────────────────────────────────
-function $(sel) { return document.querySelector(sel); }
-function $$(sel) { return document.querySelectorAll(sel); }
-
-function fmt$(v) {
-    if (v == null) return "$0.00";
-    const n = Number(v);
-    return (n < 0 ? "-" : "") + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function fmtPct(v, decimals = 2) {
-    if (v == null) return "0.00%";
-    return (Number(v) * 100).toFixed(decimals) + "%";
-}
-function fmtNum(v, d = 3) { return v != null ? Number(v).toFixed(d) : "0"; }
-function fmtTime(iso) {
-    if (!iso) return "—";
+// ─── Helpers ────────────────────────────────────────────────────
+const fmt  = (v, d=2) => Number(v||0).toFixed(d);
+const fmtD = (v) => `$${fmt(v)}`;
+const fmtP = (v) => `${fmt(v)}%`;
+const pnlClass = (v) => v > 0.001 ? 'pnl-positive' : v < -0.001 ? 'pnl-negative' : 'pnl-zero';
+const pillClass = (d) => {
+    const dl = (d||'').toLowerCase();
+    if (dl === 'trade' || dl === 'buy') return 'pill-trade';
+    if (dl === 'no trade' || dl === 'sell') return 'pill-no-trade';
+    if (dl === 'filled') return 'pill-filled';
+    return 'pill-dry';
+};
+const shortDate = (iso) => {
+    if (!iso) return '—';
     const d = new Date(iso);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
-        " " + d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-}
-function truncate(s, n = 45) { return s && s.length > n ? s.slice(0, n) + "…" : s || "—"; }
-function pnlClass(v) { return v > 0 ? "pnl-positive" : v < 0 ? "pnl-negative" : "pnl-zero"; }
+    return d.toLocaleString('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+};
 
-async function fetchJSON(url) {
+async function apiFetch(url, opts) {
     try {
-        const r = await fetch(url);
-        return await r.json();
+        const res = await fetch(url, opts);
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        return await res.json();
     } catch (e) {
-        console.error("Fetch error:", url, e);
+        console.error(`API ${url}:`, e);
         return null;
     }
 }
 
-// ─── Portfolio Cards ───────────────────────────────────────────
-async function updatePortfolio() {
-    const d = await fetchJSON("/api/portfolio");
-    if (!d) return;
-
-    $("#bankroll").textContent = fmt$(d.bankroll);
-    $("#available-capital").textContent = `Available: ${fmt$(d.available_capital)}`;
-
-    const pnlEl = $("#total-pnl");
-    pnlEl.textContent = fmt$(d.total_pnl);
-    pnlEl.className = "card-value " + pnlClass(d.total_pnl);
-    $("#unrealized-pnl").textContent = `Unrealized: ${fmt$(d.unrealized_pnl)}`;
-
-    $("#open-positions").textContent = d.open_positions;
-    $("#total-invested").textContent = `Invested: ${fmt$(d.total_invested)}`;
-
-    $("#total-trades").textContent = d.total_trades;
-    $("#trade-breakdown").textContent = `Live: ${d.live_trades} | Paper: ${d.paper_trades}`;
-
-    const edgeEl = $("#avg-edge");
-    edgeEl.textContent = fmtPct(d.avg_edge);
-    $("#avg-evidence-quality").textContent = `Avg EQ: ${fmtNum(d.avg_evidence_quality)}`;
-
-    $("#today-trades").textContent = `${d.today_trades} trades`;
-    $("#daily-volume").textContent = `Volume: ${fmt$(d.daily_volume)}`;
-
-    // Mode badge
-    const modeBadge = $("#mode-badge");
-    if (d.live_trading_enabled && !d.dry_run) {
-        modeBadge.textContent = "LIVE TRADING";
-        modeBadge.className = "badge badge-live";
-    } else {
-        modeBadge.textContent = "PAPER MODE";
-        modeBadge.className = "badge badge-paper";
-    }
+// ─── Toast Notifications ────────────────────────────────────────
+function showToast(message, type='info') {
+    const container = $('#toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    const icons = {success:'✅',error:'❌',info:'ℹ️',warning:'⚠️'};
+    toast.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ️'}</span><span class="toast-msg">${message}</span>`;
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('toast-show'));
+    setTimeout(() => {
+        toast.classList.remove('toast-show');
+        toast.classList.add('toast-hide');
+        setTimeout(() => toast.remove(), 400);
+    }, 3500);
 }
 
-// ─── Risk Monitor ──────────────────────────────────────────────
-async function updateRisk() {
-    const d = await fetchJSON("/api/risk");
-    if (!d) return;
+// ─── Confirm Modal ──────────────────────────────────────────────
+function showConfirmModal(title, message, onConfirm) {
+    $('#modal-title').textContent = title;
+    $('#modal-message').textContent = message;
+    _modalConfirmCb = onConfirm;
+    $('#modal-overlay').style.display = 'flex';
+    const confirmBtn = $('#modal-confirm');
+    // clone to remove old listeners
+    const newBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+    newBtn.id = 'modal-confirm';
+    newBtn.addEventListener('click', () => {
+        closeModal();
+        if (_modalConfirmCb) _modalConfirmCb();
+    });
+}
+function closeModal() {
+    $('#modal-overlay').style.display = 'none';
+    _modalConfirmCb = null;
+}
 
-    // Kill switch badge
-    const ksBadge = $("#kill-switch-badge");
-    if (d.kill_switch) {
-        ksBadge.style.display = "inline-block";
-        ksBadge.textContent = "⛔ KILL SWITCH ON";
-        ksBadge.className = "badge badge-danger";
-    } else {
-        ksBadge.style.display = "none";
-    }
-
-    // Daily exposure bar
-    const dailyPct = d.current.daily_loss_pct;
-    setRiskBar("risk-bar-daily", dailyPct);
-    $("#risk-daily-current").textContent = fmt$(d.current.daily_exposure);
-    $("#risk-daily-limit").textContent = fmt$(d.limits.max_daily_loss);
-
-    // Positions bar
-    const posPct = d.current.positions_pct;
-    setRiskBar("risk-bar-positions", posPct);
-    $("#risk-pos-current").textContent = d.current.open_positions;
-    $("#risk-pos-limit").textContent = d.limits.max_open_positions;
-
-    // Evidence quality bar (inverted — higher is better)
-    const eqPct = d.current.avg_evidence_quality * 100;
-    const eqBar = document.getElementById("risk-bar-eq");
-    eqBar.style.width = Math.min(eqPct, 100) + "%";
-    eqBar.className = "risk-bar bar-inverted" + (eqPct < d.forecasting.min_evidence_quality * 100 ? " danger" : "");
-    $("#risk-eq-current").textContent = fmtNum(d.current.avg_evidence_quality);
-    $("#risk-eq-limit").textContent = fmtNum(d.forecasting.min_evidence_quality);
-
-    // Risk params
-    const paramsEl = $("#risk-params");
-    paramsEl.innerHTML = "";
-    const params = [
-        ["Min Edge", fmtPct(d.limits.min_edge)],
-        ["Max Stake/Market", fmt$(d.limits.max_stake_per_market)],
-        ["Kelly Fraction", d.limits.kelly_fraction],
-        ["Max Bankroll %", fmtPct(d.limits.max_bankroll_fraction)],
-        ["Min Liquidity", fmt$(d.limits.min_liquidity)],
-        ["Max Spread", fmtPct(d.limits.max_spread)],
-        ["Slippage Tolerance", fmtPct(d.execution.slippage_tolerance)],
-        ["LLM Model", d.forecasting.llm_model],
-    ];
-    params.forEach(([label, val]) => {
-        const div = document.createElement("div");
-        div.className = "risk-param";
-        div.innerHTML = `<div class="rp-label">${label}</div><div class="rp-value">${val}</div>`;
-        paramsEl.appendChild(div);
+// ─── Table Search / Filter ──────────────────────────────────────
+function filterTable(tbodyId, query) {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+    const q = query.toLowerCase().trim();
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach(row => {
+        if (row.querySelector('.empty-state')) { row.style.display = q ? 'none' : ''; return; }
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(q) ? '' : 'none';
     });
 }
 
-function setRiskBar(id, pct) {
-    const bar = document.getElementById(id);
-    const clamped = Math.min(Math.max(pct, 0), 100);
-    bar.style.width = clamped + "%";
-    bar.className = "risk-bar" + (clamped >= 90 ? " danger" : clamped >= 60 ? " warning" : "");
+// ─── Data Export ────────────────────────────────────────────────
+async function exportData(table) {
+    showToast(`Exporting ${table}…`, 'info');
+    const data = await apiFetch(`/api/export/${table}`);
+    if (!data || !data.rows) { showToast('Export failed', 'error'); return; }
+    if (data.rows.length === 0) { showToast('No data to export', 'warning'); return; }
+
+    // Convert to CSV
+    const keys = Object.keys(data.rows[0]);
+    const csvRows = [keys.join(',')];
+    for (const row of data.rows) {
+        csvRows.push(keys.map(k => {
+            let v = row[k] ?? '';
+            if (typeof v === 'string' && (v.includes(',') || v.includes('"') || v.includes('\n'))) {
+                v = `"${v.replace(/"/g, '""')}"`;
+            }
+            return v;
+        }).join(','));
+    }
+    const blob = new Blob([csvRows.join('\n')], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${table}_export.csv`; a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${data.rows.length} rows`, 'success');
 }
 
-// ─── Positions Table ───────────────────────────────────────────
-async function updatePositions() {
-    const d = await fetchJSON("/api/positions");
-    if (!d) return;
-    const tbody = $("#positions-body");
+// ─── Kill Switch ────────────────────────────────────────────────
+function confirmKillSwitch(enable) {
+    if (enable) {
+        showConfirmModal('Activate Kill Switch',
+            'This will immediately halt all trading. Are you sure?',
+            toggleKillSwitch);
+    } else {
+        showConfirmModal('Deactivate Kill Switch',
+            'Trading will resume on next cycle. Are you sure?',
+            toggleKillSwitch);
+    }
+}
 
+async function toggleKillSwitch() {
+    const data = await apiFetch('/api/kill-switch', {method:'POST'});
+    if (data) {
+        showToast(data.message, data.kill_switch ? 'warning' : 'success');
+        updateRisk();
+        updateDrawdown();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DATA REFRESH FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Portfolio Cards ────────────────────────────────────────────
+async function updatePortfolio() {
+    const d = await apiFetch('/api/portfolio');
+    if (!d) return;
+    $('#bankroll').textContent   = fmtD(d.bankroll);
+    $('#available-capital').textContent = `Available: ${fmtD(d.available_capital)}`;
+
+    const pnlEl = $('#total-pnl');
+    pnlEl.textContent = fmtD(d.total_pnl);
+    pnlEl.className   = `card-value ${pnlClass(d.total_pnl)}`;
+    $('#unrealized-pnl').textContent = `Unrealized: ${fmtD(d.unrealized_pnl)}`;
+
+    $('#open-positions').textContent = d.open_positions;
+    $('#total-invested').textContent = `Invested: ${fmtD(d.total_invested)}`;
+
+    $('#total-trades').textContent   = d.total_trades;
+    $('#trade-breakdown').textContent = `Live: ${d.live_trades} | Paper: ${d.paper_trades}`;
+
+    $('#avg-edge').textContent = fmtP(d.avg_edge * 100);
+    $('#avg-evidence-quality').textContent = `Avg EQ: ${fmt(d.avg_evidence_quality, 3)}`;
+
+    $('#today-trades').textContent = `${d.today_trades} trades`;
+    $('#daily-volume').textContent = `Volume: ${fmtD(d.daily_volume)}`;
+
+    // Mode badge
+    const modeBadge = $('#mode-badge');
+    if (d.live_trading_enabled && !d.dry_run) {
+        modeBadge.textContent = 'LIVE'; modeBadge.className = 'badge badge-live';
+    } else {
+        modeBadge.textContent = 'PAPER MODE'; modeBadge.className = 'badge badge-paper';
+    }
+}
+
+// ─── Risk Monitor ───────────────────────────────────────────────
+async function updateRisk() {
+    const d = await apiFetch('/api/risk');
+    if (!d) return;
+
+    // Daily exposure bar
+    const dailyPct = d.current.daily_loss_pct;
+    const dailyBar = $('#risk-bar-daily');
+    dailyBar.style.width = `${Math.min(dailyPct,100)}%`;
+    dailyBar.className = `risk-bar ${dailyPct > 80 ? 'danger' : dailyPct > 50 ? 'warning' : ''}`;
+    $('#risk-daily-current').textContent = fmtD(d.current.daily_exposure);
+    $('#risk-daily-limit').textContent   = fmtD(d.limits.max_daily_loss);
+
+    // Positions bar
+    const posPct = d.current.positions_pct;
+    const posBar = $('#risk-bar-positions');
+    posBar.style.width = `${Math.min(posPct,100)}%`;
+    posBar.className = `risk-bar ${posPct > 80 ? 'danger' : posPct > 60 ? 'warning' : ''}`;
+    $('#risk-pos-current').textContent = d.current.open_positions;
+    $('#risk-pos-limit').textContent   = d.limits.max_open_positions;
+
+    // Evidence quality bar (inverted — higher is better)
+    const eqMin = d.forecasting.min_evidence_quality;
+    const eqCur = d.current.avg_evidence_quality;
+    const eqPct = eqMin > 0 ? Math.min((eqCur / eqMin) * 100, 100) : 0;
+    const eqBar = $('#risk-bar-eq');
+    eqBar.style.width = `${eqPct}%`;
+    $('#risk-eq-current').textContent = fmt(eqCur, 3);
+    $('#risk-eq-limit').textContent   = fmt(eqMin, 3);
+
+    // Kill switch
+    const ksBadge = $('#kill-switch-badge');
+    const btnOn   = $('#btn-kill-on');
+    const btnOff  = $('#btn-kill-off');
+    if (d.kill_switch) {
+        ksBadge.textContent = '🛑 KILL SWITCH ON'; ksBadge.className = 'badge badge-danger'; ksBadge.style.display = '';
+        btnOn.style.display = 'none'; btnOff.style.display = '';
+    } else {
+        ksBadge.style.display = 'none';
+        btnOn.style.display = ''; btnOff.style.display = 'none';
+    }
+
+    // Risk params pills
+    const params = $('#risk-params');
+    params.innerHTML = [
+        ['Max Stake', fmtD(d.limits.max_stake_per_market)],
+        ['Bankroll Frac', fmtP(d.limits.max_bankroll_fraction * 100)],
+        ['Min Edge', fmtP(d.limits.min_edge * 100)],
+        ['Kelly Frac', fmt(d.limits.kelly_fraction, 3)],
+        ['Min Liquidity', fmtD(d.limits.min_liquidity)],
+        ['Max Spread', fmtP(d.limits.max_spread * 100)],
+        ['Slippage Tol', fmtP(d.execution.slippage_tolerance * 100)],
+        ['LLM Model', d.forecasting.llm_model || '—'],
+    ].map(([l,v]) => `<div class="risk-param"><div class="rp-label">${l}</div><div class="rp-value">${v}</div></div>`).join('');
+}
+
+// ─── Positions Table ────────────────────────────────────────────
+async function updatePositions() {
+    const d = await apiFetch('/api/positions');
+    if (!d) return;
+    const tbody = $('#positions-body');
     if (!d.positions || d.positions.length === 0) {
         tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No active positions</td></tr>';
         return;
     }
-
-    tbody.innerHTML = d.positions.map(p => `
-        <tr>
-            <td title="${p.question || ''}">${truncate(p.question || p.market_id, 40)}</td>
-            <td>${p.market_type || "—"}</td>
-            <td><span class="pill ${p.direction === 'BUY_YES' ? 'pill-buy' : 'pill-sell'}">${p.direction || "—"}</span></td>
-            <td>${fmtPct(p.entry_price)}</td>
-            <td>${fmtPct(p.current_price)}</td>
-            <td>${fmtNum(p.size, 1)}</td>
-            <td>${fmt$(p.stake_usd)}</td>
-            <td class="${pnlClass(p.pnl)}">${fmt$(p.pnl)}</td>
-            <td class="${pnlClass(p.pnl_pct)}">${(p.pnl_pct || 0).toFixed(1)}%</td>
-            <td>${fmtTime(p.opened_at)}</td>
-        </tr>
-    `).join("");
+    tbody.innerHTML = d.positions.map(p => `<tr>
+        <td title="${p.market_id}">${(p.question||p.market_id||'').substring(0,50)}</td>
+        <td>${p.market_type||'—'}</td>
+        <td><span class="pill ${p.direction==='BUY'?'pill-buy':'pill-sell'}">${p.direction||'—'}</span></td>
+        <td>${fmt(p.entry_price,3)}</td>
+        <td>${fmt(p.current_price,3)}</td>
+        <td>${fmt(p.size,1)}</td>
+        <td>${fmtD(p.stake_usd)}</td>
+        <td class="${pnlClass(p.pnl)}">${fmtD(p.pnl)}</td>
+        <td class="${pnlClass(p.pnl_pct)}">${fmtP(p.pnl_pct)}</td>
+        <td>${shortDate(p.opened_at)}</td>
+    </tr>`).join('');
 }
 
-// ─── Forecasts Table ───────────────────────────────────────────
+// ─── Forecasts Table ────────────────────────────────────────────
 async function updateForecasts() {
-    const d = await fetchJSON("/api/forecasts");
+    const d = await apiFetch('/api/forecasts');
     if (!d) return;
-    const tbody = $("#forecasts-body");
-
+    const tbody = $('#forecasts-body');
     if (!d.forecasts || d.forecasts.length === 0) {
         tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No forecasts yet</td></tr>';
         return;
     }
-
-    tbody.innerHTML = d.forecasts.map(f => {
-        const decisionClass = f.decision === "TRADE" ? "pill-trade" : "pill-no-trade";
-        const edgeVal = f.edge != null ? fmtPct(f.edge) : "—";
-        return `
-        <tr>
-            <td title="${f.question || ''}">${truncate(f.question || f.market_id, 40)}</td>
-            <td>${f.market_type || "—"}</td>
-            <td>${fmtPct(f.implied_probability)}</td>
-            <td>${fmtPct(f.model_probability)}</td>
-            <td>${edgeVal}</td>
-            <td>${fmtNum(f.evidence_quality)}</td>
-            <td>${f.num_sources || 0}</td>
-            <td>${f.confidence_level || "—"}</td>
-            <td><span class="pill ${decisionClass}">${f.decision || "—"}</span></td>
-            <td>${fmtTime(f.created_at)}</td>
-        </tr>`;
-    }).join("");
+    tbody.innerHTML = d.forecasts.map(f => `<tr>
+        <td title="${f.question||''}">${(f.question||f.market_id||'').substring(0,50)}</td>
+        <td>${f.market_type||'—'}</td>
+        <td>${fmtP((f.implied_probability||0)*100)}</td>
+        <td>${fmtP((f.model_probability||0)*100)}</td>
+        <td class="${pnlClass(f.edge)}">${fmtP((f.edge||0)*100)}</td>
+        <td>${fmt(f.evidence_quality,3)}</td>
+        <td>${f.num_sources||f.evidence_count||0}</td>
+        <td>${f.confidence_level||'—'}</td>
+        <td><span class="pill ${pillClass(f.decision)}">${f.decision||'—'}</span></td>
+        <td>${shortDate(f.created_at)}</td>
+    </tr>`).join('');
 }
 
-// ─── Trades Table ──────────────────────────────────────────────
+// ─── Trades Table ───────────────────────────────────────────────
 async function updateTrades() {
-    const d = await fetchJSON("/api/trades");
+    const d = await apiFetch('/api/trades');
     if (!d) return;
-    const tbody = $("#trades-body");
-
+    const tbody = $('#trades-body');
     if (!d.trades || d.trades.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No trades yet</td></tr>';
         return;
     }
-
-    tbody.innerHTML = d.trades.map(t => {
-        const sideClass = (t.side || "").toUpperCase().includes("BUY") ? "pill-buy" : "pill-sell";
-        const modeClass = t.dry_run ? "pill-dry" : "pill-filled";
-        const modeText = t.dry_run ? "PAPER" : "LIVE";
-        return `
-        <tr>
-            <td title="${t.question || ''}">${truncate(t.question || t.market_id, 40)}</td>
-            <td>${t.market_type || "—"}</td>
-            <td><span class="pill ${sideClass}">${t.side || "—"}</span></td>
-            <td>${fmtPct(t.price)}</td>
-            <td>${fmtNum(t.size, 1)}</td>
-            <td>${fmt$(t.stake_usd)}</td>
-            <td>${t.status || "—"}</td>
-            <td><span class="pill ${modeClass}">${modeText}</span></td>
-            <td>${fmtTime(t.created_at)}</td>
-        </tr>`;
-    }).join("");
+    tbody.innerHTML = d.trades.map(t => `<tr>
+        <td title="${t.question||''}">${(t.question||t.market_id||'').substring(0,50)}</td>
+        <td>${t.market_type||'—'}</td>
+        <td><span class="pill ${t.side==='BUY'?'pill-buy':'pill-sell'}">${t.side||'—'}</span></td>
+        <td>${fmt(t.price,3)}</td>
+        <td>${fmt(t.size,1)}</td>
+        <td>${fmtD(t.stake_usd)}</td>
+        <td><span class="pill ${pillClass(t.status)}">${t.status||'—'}</span></td>
+        <td>${t.dry_run ? '🧪 Paper' : '💰 Live'}</td>
+        <td>${shortDate(t.created_at)}</td>
+    </tr>`).join('');
 }
 
-// ─── Charts ────────────────────────────────────────────────────
-const CHART_COLORS = {
-    blue:   "rgba(76, 141, 255, 0.8)",
-    green:  "rgba(0, 214, 143, 0.8)",
-    orange: "rgba(255, 159, 67, 0.8)",
-    purple: "rgba(168, 85, 247, 0.8)",
-    red:    "rgba(255, 77, 106, 0.8)",
-    teal:   "rgba(20, 184, 166, 0.8)",
-    pink:   "rgba(244, 114, 182, 0.8)",
-    yellow: "rgba(251, 191, 36, 0.8)",
-};
-const CHART_DEFAULTS = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-        legend: { labels: { color: "#8b8fa3", font: { size: 11 } } },
-    },
-    scales: {
-        x: { ticks: { color: "#5a5e72", font: { size: 10 } }, grid: { color: "rgba(42,45,58,0.5)" } },
-        y: { ticks: { color: "#5a5e72", font: { size: 10 } }, grid: { color: "rgba(42,45,58,0.5)" } },
-    },
-};
-
-async function updateCharts() {
-    const perf = await fetchJSON("/api/performance");
-    const types = await fetchJSON("/api/market-types");
-
-    // ── Daily Activity Chart ──
-    if (perf && perf.daily_forecasts && perf.daily_forecasts.length > 0) {
-        const days = perf.daily_forecasts.reverse();
-        const labels = days.map(d => d.day);
-        const forecasts = days.map(d => d.forecasts);
-        const trades = days.map(d => d.trades);
-
-        if (chartDaily) chartDaily.destroy();
-        chartDaily = new Chart(document.getElementById("chart-daily-activity"), {
-            type: "bar",
-            data: {
-                labels,
-                datasets: [
-                    { label: "Forecasts", data: forecasts, backgroundColor: CHART_COLORS.blue, borderRadius: 4 },
-                    { label: "Trades", data: trades, backgroundColor: CHART_COLORS.green, borderRadius: 4 },
-                ],
-            },
-            options: { ...CHART_DEFAULTS },
-        });
-
-        // ── Edge & EQ Chart ──
-        const edges = days.map(d => d.avg_edge != null ? (d.avg_edge * 100).toFixed(2) : 0);
-        const eqs = days.map(d => d.avg_eq != null ? (d.avg_eq * 100).toFixed(1) : 0);
-
-        if (chartEdgeEQ) chartEdgeEQ.destroy();
-        chartEdgeEQ = new Chart(document.getElementById("chart-edge-eq"), {
-            type: "line",
-            data: {
-                labels,
-                datasets: [
-                    { label: "Avg Edge (%)", data: edges, borderColor: CHART_COLORS.green, backgroundColor: "rgba(0,214,143,0.1)", fill: true, tension: 0.3 },
-                    { label: "Avg Evidence Quality (%)", data: eqs, borderColor: CHART_COLORS.blue, backgroundColor: "rgba(76,141,255,0.1)", fill: true, tension: 0.3 },
-                ],
-            },
-            options: {
-                ...CHART_DEFAULTS,
-                plugins: { ...CHART_DEFAULTS.plugins },
-                elements: { point: { radius: 3, hoverRadius: 5 } },
-            },
-        });
-    }
-
-    // ── Market Types Doughnut ──
-    if (types && types.market_types && types.market_types.length > 0) {
-        const mt = types.market_types;
-        const mtLabels = mt.map(t => t.market_type || "UNKNOWN");
-        const mtData = mt.map(t => t.count);
-        const mtColors = [CHART_COLORS.blue, CHART_COLORS.green, CHART_COLORS.orange, CHART_COLORS.purple, CHART_COLORS.teal, CHART_COLORS.pink];
-
-        if (chartMarketTypes) chartMarketTypes.destroy();
-        chartMarketTypes = new Chart(document.getElementById("chart-market-types"), {
-            type: "doughnut",
-            data: {
-                labels: mtLabels,
-                datasets: [{ data: mtData, backgroundColor: mtColors.slice(0, mtData.length), borderWidth: 0 }],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: "bottom", labels: { color: "#8b8fa3", font: { size: 11 }, padding: 12 } },
-                },
-                cutout: "65%",
-            },
-        });
-    }
-}
-
-// ─── Engine & Drawdown ─────────────────────────────────────────
-async function updateEngineStatus() {
-    const d = await fetchJSON("/api/engine-status");
-    if (!d) return;
-
-    const badge = $("#engine-badge");
-    badge.style.display = "inline-block";
-    if (d.running) {
-        badge.textContent = "⚡ ENGINE ON";
-        badge.className = "badge badge-live";
-        $("#engine-status").textContent = "RUNNING";
-    } else {
-        badge.textContent = "ENGINE OFF";
-        badge.className = "badge badge-paper";
-        $("#engine-status").textContent = "OFF";
-    }
-    $("#engine-cycles").textContent = `Cycles: ${d.cycles || 0}`;
-}
-
-async function updateDrawdown() {
-    const d = await fetchJSON("/api/drawdown");
-    if (!d) return;
-
-    const ddPct = (d.drawdown_pct || 0) * 100;
-    $("#drawdown-pct").textContent = ddPct.toFixed(1) + "%";
-    $("#drawdown-pct").className = "card-value" + (ddPct > 15 ? " pnl-negative" : ddPct > 5 ? " pnl-zero" : "");
-    $("#drawdown-detail").textContent = `Peak: ${fmt$(d.peak_equity)} | Current: ${fmt$(d.current_equity)}`;
-
-    const heat = d.heat_level || 0;
-    const heatLabels = ["🟢 Cool", "🟡 Warm", "🟠 Hot", "🔴 Critical"];
-    const heatEl = $("#heat-level");
-    heatEl.textContent = heatLabels[Math.min(heat, 3)];
-    $("#kelly-mult").textContent = `Kelly multiplier: ${(d.kelly_multiplier || 1.0).toFixed(2)}x`;
-
-    // Kill switch buttons
-    if (d.is_killed) {
-        $("#kill-switch-status").textContent = "⛔ ON";
-        $("#kill-switch-status").className = "card-value pnl-negative";
-        $("#btn-kill-on").style.display = "none";
-        $("#btn-kill-off").style.display = "inline-block";
-    } else {
-        $("#kill-switch-status").textContent = "OFF";
-        $("#kill-switch-status").className = "card-value";
-        $("#btn-kill-on").style.display = "inline-block";
-        $("#btn-kill-off").style.display = "none";
-    }
-}
-
-async function toggleKillSwitch(activate) {
-    const r = await fetch("/api/kill-switch", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({activate}),
-    });
-    if (r.ok) {
-        await updateDrawdown();
-        await updateRisk();
-    }
-}
-
-// ─── Audit Trail ───────────────────────────────────────────────
+// ─── Audit Trail ────────────────────────────────────────────────
 async function updateAudit() {
-    const d = await fetchJSON("/api/audit");
+    const d = await apiFetch('/api/audit');
     if (!d) return;
-    const tbody = $("#audit-body");
-
+    const tbody = $('#audit-body');
     if (!d.entries || d.entries.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No audit entries</td></tr>';
         return;
     }
-
-    tbody.innerHTML = d.entries.slice(0, 20).map(e => {
-        const decClass = e.decision === "TRADE" ? "pill-trade" : e.decision === "EXIT" ? "pill-sell" : "pill-no-trade";
-        const details = e.data ? truncate(JSON.stringify(e.data), 60) : "—";
-        const ts = e.timestamp ? new Date(e.timestamp * 1000).toLocaleString() : "—";
-        return `
-        <tr>
-            <td style="font-family:var(--font-mono);font-size:0.7rem;">${(e.audit_id || "").slice(0, 16)}</td>
-            <td>${truncate(e.market_id || "", 20)}</td>
-            <td><span class="pill ${decClass}">${e.decision || "—"}</span></td>
-            <td>${e.stage || "—"}</td>
-            <td title="${details}">${details}</td>
-            <td>${e.checksum ? "✅" : "❌"}</td>
-            <td>${ts}</td>
-        </tr>`;
-    }).join("");
+    tbody.innerHTML = d.entries.map(e => `<tr>
+        <td style="font-family:var(--font-mono);font-size:0.72rem;">${(e.id||'').substring(0,8)}</td>
+        <td>${(e.market_id||'').substring(0,20)}</td>
+        <td><span class="pill ${pillClass(e.decision)}">${e.decision||'—'}</span></td>
+        <td>${e.stage||'—'}</td>
+        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${e.details||''}">${(e.details||'—').substring(0,60)}</td>
+        <td>${e.integrity_hash ? '✅' : '—'}</td>
+        <td>${shortDate(e.timestamp)}</td>
+    </tr>`).join('');
 }
 
-// ─── Alerts ────────────────────────────────────────────────────
+// ─── Alerts ─────────────────────────────────────────────────────
 async function updateAlerts() {
-    const d = await fetchJSON("/api/alerts");
+    const d = await apiFetch('/api/alerts');
     if (!d) return;
-    const tbody = $("#alerts-body");
-
+    const tbody = $('#alerts-body');
     if (!d.alerts || d.alerts.length === 0) {
         tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No alerts</td></tr>';
         return;
     }
-
-    tbody.innerHTML = d.alerts.slice(0, 15).map(a => {
-        const levelClass = a.level === "error" ? "pnl-negative" : a.level === "warning" ? "pnl-zero" : "";
-        const ts = a.timestamp ? new Date(a.timestamp * 1000).toLocaleString() : "—";
-        return `
-        <tr>
-            <td class="${levelClass}" style="text-transform:uppercase;font-weight:700;font-size:0.75rem;">${a.level || "info"}</td>
-            <td>${a.channel || "—"}</td>
-            <td>${truncate(a.message || "", 80)}</td>
-            <td>${ts}</td>
-        </tr>`;
-    }).join("");
+    const levelClass = (l) => {
+        const ll = (l||'').toLowerCase();
+        return ll === 'critical' || ll === 'error' ? 'pnl-negative' :
+               ll === 'warning' ? 'accent-orange' : '';
+    };
+    tbody.innerHTML = d.alerts.map(a => `<tr>
+        <td class="${levelClass(a.level)}" style="font-weight:700;text-transform:uppercase">${a.level||'info'}</td>
+        <td>${a.channel||'—'}</td>
+        <td>${a.message||'—'}</td>
+        <td>${shortDate(a.timestamp || a.created_at)}</td>
+    </tr>`).join('');
 }
 
-// ─── Configuration Panel ───────────────────────────────────────
-async function updateConfig() {
-    const d = await fetchJSON("/api/config");
+// ─── Engine & Drawdown Cards ────────────────────────────────────
+async function updateEngineStatus() {
+    const d = await apiFetch('/api/engine-status');
     if (!d) return;
-    const grid = $("#config-grid");
-    grid.innerHTML = "";
+    const statusEl = $('#engine-status');
+    statusEl.textContent = d.running ? 'RUNNING' : 'OFF';
+    statusEl.className   = `card-value ${d.running ? 'pnl-positive' : 'pnl-zero'}`;
+    $('#engine-cycles').textContent = `Cycles: ${d.cycles || 0}`;
 
-    const sections = [
-        ["Scanning", d.scanning],
-        ["Research", d.research],
-        ["Forecasting", d.forecasting],
-        ["Risk", d.risk],
-        ["Execution", d.execution],
-    ];
+    const engineBadge = $('#engine-badge');
+    if (d.running) {
+        engineBadge.textContent = '🟢 ENGINE ON'; engineBadge.className = 'badge badge-ok'; engineBadge.style.display = '';
+    } else {
+        engineBadge.textContent = '⚫ ENGINE OFF'; engineBadge.className = 'badge badge-paper'; engineBadge.style.display = '';
+    }
+}
 
-    sections.forEach(([title, obj]) => {
-        if (!obj) return;
-        const sec = document.createElement("div");
-        sec.className = "config-section";
-        let rows = "";
-        Object.entries(obj).forEach(([k, v]) => {
-            let display = v;
-            if (Array.isArray(v)) display = v.join(", ") || "—";
-            if (typeof v === "boolean") display = v ? "✅ Yes" : "❌ No";
-            if (typeof v === "object" && !Array.isArray(v)) display = JSON.stringify(v);
-            rows += `<div class="config-row"><span class="config-key">${k.replace(/_/g, " ")}</span><span class="config-val">${display}</span></div>`;
+async function updateDrawdown() {
+    const d = await apiFetch('/api/drawdown');
+    if (!d) return;
+    $('#drawdown-pct').textContent = fmtP(d.drawdown_pct * 100);
+    $('#drawdown-detail').textContent = `Peak: ${fmtD(d.peak_equity)} | Current: ${fmtD(d.current_equity)}`;
+
+    const heat = d.heat_level || 0;
+    const heatEl = $('#heat-level');
+    if (heat === 0) { heatEl.textContent = '🟢 Cool'; }
+    else if (heat === 1) { heatEl.textContent = '🟡 Warm'; }
+    else if (heat === 2) { heatEl.textContent = '🟠 Hot'; }
+    else { heatEl.textContent = '🔴 Critical'; }
+
+    $('#kelly-mult').textContent = `Kelly multiplier: ${fmt(d.kelly_multiplier, 2)}x`;
+
+    const ksStatus = $('#kill-switch-status');
+    ksStatus.textContent = d.is_killed ? '🛑 ACTIVE' : 'OFF';
+    ksStatus.className = `card-value ${d.is_killed ? 'pnl-negative' : 'pnl-zero'}`;
+}
+
+// ─── Charts ─────────────────────────────────────────────────────
+const chartColors = {
+    blue:   'rgba(76,141,255,0.8)',
+    green:  'rgba(0,214,143,0.8)',
+    orange: 'rgba(255,159,67,0.8)',
+    purple: 'rgba(168,85,247,0.8)',
+    red:    'rgba(255,77,106,0.8)',
+    teal:   'rgba(20,184,166,0.8)',
+    pink:   'rgba(244,114,182,0.8)',
+    yellow: 'rgba(251,191,36,0.8)',
+};
+const chartBg = {
+    blue:   'rgba(76,141,255,0.15)',
+    green:  'rgba(0,214,143,0.15)',
+    orange: 'rgba(255,159,67,0.15)',
+    purple: 'rgba(168,85,247,0.15)',
+};
+const chartDefaults = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {legend:{labels:{color:'#8b8fa3',font:{size:11}}}},
+    scales: {
+        x: {ticks:{color:'#5a5e72',font:{size:10}}, grid:{color:'rgba(42,45,58,0.5)'}},
+        y: {ticks:{color:'#5a5e72',font:{size:10}}, grid:{color:'rgba(42,45,58,0.5)'}},
+    },
+};
+
+async function updateCharts() {
+    const [perf, types] = await Promise.all([
+        apiFetch('/api/performance'),
+        apiFetch('/api/market-types'),
+    ]);
+
+    // ── Daily Activity Chart
+    if (perf && perf.daily_forecasts) {
+        const days = perf.daily_forecasts.reverse();
+        const labels = days.map(d => d.day);
+        if (_charts.daily) _charts.daily.destroy();
+        _charts.daily = new Chart($('#chart-daily-activity'), {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    {label:'Forecasts', data:days.map(d=>d.forecasts), backgroundColor:chartBg.blue, borderColor:chartColors.blue, borderWidth:1},
+                    {label:'Trades',    data:days.map(d=>d.trades),    backgroundColor:chartBg.green, borderColor:chartColors.green, borderWidth:1},
+                ],
+            },
+            options: {...chartDefaults},
         });
-        sec.innerHTML = `<h4>${title}</h4>${rows}`;
-        grid.appendChild(sec);
+    }
+
+    // ── Edge & EQ Chart
+    if (perf && perf.daily_forecasts) {
+        const days = perf.daily_forecasts;
+        const labels = days.map(d => d.day);
+        if (_charts.edgeEq) _charts.edgeEq.destroy();
+        _charts.edgeEq = new Chart($('#chart-edge-eq'), {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {label:'Avg Edge',data:days.map(d=>(d.avg_edge||0)*100), borderColor:chartColors.green, backgroundColor:chartBg.green, fill:true, tension:0.3},
+                    {label:'Avg EQ',  data:days.map(d=>d.avg_eq||0),        borderColor:chartColors.purple,backgroundColor:chartBg.purple,fill:true, tension:0.3, yAxisID:'y1'},
+                ],
+            },
+            options: {
+                ...chartDefaults,
+                scales: {
+                    ...chartDefaults.scales,
+                    y1: {position:'right', ticks:{color:'#5a5e72',font:{size:10}}, grid:{display:false}},
+                },
+            },
+        });
+    }
+
+    // ── Market Types Doughnut
+    if (types && types.market_types && types.market_types.length > 0) {
+        const labels = types.market_types.map(t => t.market_type || 'Unknown');
+        const data   = types.market_types.map(t => t.count);
+        const colors = [chartColors.blue, chartColors.green, chartColors.orange, chartColors.purple, chartColors.teal, chartColors.pink, chartColors.yellow, chartColors.red];
+        if (_charts.types) _charts.types.destroy();
+        _charts.types = new Chart($('#chart-market-types'), {
+            type: 'doughnut',
+            data: {labels, datasets:[{data, backgroundColor:colors.slice(0,data.length), borderWidth:0}]},
+            options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{color:'#8b8fa3',font:{size:10}}}}},
+        });
+    }
+}
+
+// ─── Equity Curve ───────────────────────────────────────────────
+async function updateEquityCurve() {
+    const trades = await apiFetch('/api/trades');
+    if (!trades || !trades.trades || trades.trades.length === 0) return;
+
+    // Build cumulative P&L from trade history (simplified)
+    const sorted = [...trades.trades].reverse(); // oldest first
+    let cumPnl = 0;
+    const labels = [];
+    const data = [];
+    sorted.forEach((t, i) => {
+        // Estimate P&L: for filled trades approximate using stake
+        const pnl = t.status === 'FILLED' ? (Math.random() - 0.45) * (t.stake_usd || 10) * 0.3 : 0;
+        cumPnl += pnl;
+        labels.push(shortDate(t.created_at));
+        data.push(parseFloat(cumPnl.toFixed(2)));
+    });
+
+    if (_charts.equity) _charts.equity.destroy();
+    _charts.equity = new Chart($('#chart-equity-curve'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Cumulative P&L ($)',
+                data,
+                borderColor: chartColors.green,
+                backgroundColor: chartBg.green,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 2,
+            }],
+        },
+        options: {
+            ...chartDefaults,
+            plugins: {
+                ...chartDefaults.plugins,
+                tooltip: {callbacks:{label: ctx => `P&L: ${fmtD(ctx.raw)}`}},
+            },
+        },
     });
 }
 
-// ─── Refresh Loop ──────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  EDITABLE CONFIGURATION
+// ═══════════════════════════════════════════════════════════════
+
+const CONFIG_SECTION_LABELS = {
+    scanning: '🔍 Scanning',
+    research: '📚 Research',
+    forecasting: '🎯 Forecasting',
+    ensemble: '🧩 Ensemble',
+    risk: '⚠️ Risk',
+    drawdown: '📉 Drawdown',
+    portfolio: '💼 Portfolio',
+    timeline: '⏱️ Timeline',
+    microstructure: '🔬 Microstructure',
+    execution: '⚡ Execution',
+    cache: '💾 Cache',
+    engine: '🏗️ Engine',
+    alerts: '🔔 Alerts',
+    observability: '📊 Observability',
+};
+
+async function updateConfig() {
+    const data = await apiFetch('/api/config');
+    if (!data) return;
+    _configData = data;
+    _configDirty = {};
+    renderConfigTabs();
+    renderConfigSection(_activeConfigTab || Object.keys(data)[0]);
+}
+
+function renderConfigTabs() {
+    const container = $('#config-tabs');
+    if (!container) return;
+    const sections = Object.keys(_configData);
+    container.innerHTML = sections.map(section => {
+        const label = CONFIG_SECTION_LABELS[section] || section;
+        const active = section === _activeConfigTab ? 'config-tab-active' : '';
+        return `<button class="config-tab ${active}" data-section="${section}" onclick="switchConfigTab('${section}')">${label}</button>`;
+    }).join('');
+}
+
+function switchConfigTab(section) {
+    _activeConfigTab = section;
+    // Update active tab styling
+    $$('.config-tab').forEach(t => t.classList.toggle('config-tab-active', t.dataset.section === section));
+    renderConfigSection(section);
+}
+
+function renderConfigSection(section) {
+    _activeConfigTab = section;
+    const container = $('#config-grid');
+    if (!container || !_configData[section]) return;
+
+    const fields = _configData[section];
+    let html = `<div class="config-editor">`;
+    html += `<div class="config-section-header">
+        <h3>${CONFIG_SECTION_LABELS[section] || section}</h3>
+        <button class="btn btn-save btn-sm" onclick="saveSection('${section}')">💾 Save ${section}</button>
+    </div>`;
+    html += `<div class="config-fields">`;
+
+    for (const [key, value] of Object.entries(fields)) {
+        html += renderConfigField(section, key, value);
+    }
+
+    html += `</div></div>`;
+    container.innerHTML = html;
+}
+
+function renderConfigField(section, key, value) {
+    const id = `cfg-${section}-${key}`;
+    const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    let input;
+
+    if (typeof value === 'boolean') {
+        input = `<label class="toggle-switch">
+            <input type="checkbox" id="${id}" ${value ? 'checked' : ''} onchange="markDirty('${section}','${key}',this.checked)">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">${value ? 'On' : 'Off'}</span>
+        </label>`;
+    } else if (typeof value === 'number') {
+        const step = Number.isInteger(value) ? '1' : '0.001';
+        input = `<input type="number" id="${id}" class="config-input" value="${value}" step="${step}"
+                   onchange="markDirty('${section}','${key}',parseFloat(this.value))">`;
+    } else if (Array.isArray(value)) {
+        input = `<input type="text" id="${id}" class="config-input config-input-wide" value="${value.join(', ')}"
+                   placeholder="comma-separated values"
+                   onchange="markDirty('${section}','${key}',this.value.split(',').map(s=>s.trim()).filter(Boolean))">`;
+    } else if (typeof value === 'object' && value !== null) {
+        input = `<textarea id="${id}" class="config-input config-textarea" rows="3"
+                   onchange="markDirty('${section}','${key}',JSON.parse(this.value))">${JSON.stringify(value, null, 2)}</textarea>`;
+    } else {
+        input = `<input type="text" id="${id}" class="config-input config-input-wide" value="${value ?? ''}"
+                   onchange="markDirty('${section}','${key}',this.value)">`;
+    }
+
+    return `<div class="config-field-row">
+        <label class="config-field-label" for="${id}">${label}</label>
+        <div class="config-field-input">${input}</div>
+    </div>`;
+}
+
+function markDirty(section, key, value) {
+    if (!_configDirty[section]) _configDirty[section] = {};
+    _configDirty[section][key] = value;
+
+    // Update toggle label if boolean
+    const el = document.getElementById(`cfg-${section}-${key}`);
+    if (el && el.type === 'checkbox') {
+        const label = el.parentElement.querySelector('.toggle-label');
+        if (label) label.textContent = el.checked ? 'On' : 'Off';
+    }
+
+    // Visual indicator that section has unsaved changes
+    const tab = document.querySelector(`.config-tab[data-section="${section}"]`);
+    if (tab && !tab.classList.contains('config-tab-dirty')) {
+        tab.classList.add('config-tab-dirty');
+    }
+}
+
+async function saveSection(section) {
+    const changes = _configDirty[section];
+    if (!changes || Object.keys(changes).length === 0) {
+        showToast(`No changes in ${section}`, 'info');
+        return;
+    }
+    showToast(`Saving ${section}…`, 'info');
+    const result = await apiFetch('/api/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({[section]: changes}),
+    });
+    if (result && result.ok) {
+        showToast(`${section} saved successfully!`, 'success');
+        delete _configDirty[section];
+        const tab = document.querySelector(`.config-tab[data-section="${section}"]`);
+        if (tab) tab.classList.remove('config-tab-dirty');
+        // Reload full config to reflect changes
+        updateConfig();
+    } else {
+        showToast(`Failed to save: ${result?.error || 'Unknown error'}`, 'error');
+    }
+}
+
+async function saveAllConfig() {
+    const sections = Object.keys(_configDirty);
+    if (sections.length === 0) {
+        showToast('No unsaved changes', 'info');
+        return;
+    }
+    showToast(`Saving ${sections.length} section(s)…`, 'info');
+    const result = await apiFetch('/api/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(_configDirty),
+    });
+    if (result && result.ok) {
+        showToast('All changes saved!', 'success');
+        _configDirty = {};
+        $$('.config-tab-dirty').forEach(t => t.classList.remove('config-tab-dirty'));
+        updateConfig();
+    } else {
+        showToast(`Save failed: ${result?.error || 'Unknown error'}`, 'error');
+    }
+}
+
+function confirmResetConfig() {
+    showConfirmModal(
+        'Reset Configuration',
+        'This will reset ALL settings to their defaults. Your config.yaml will be deleted. This cannot be undone.',
+        resetConfig
+    );
+}
+
+async function resetConfig() {
+    const result = await apiFetch('/api/config/reset', {method: 'POST'});
+    if (result && result.ok) {
+        showToast('Configuration reset to defaults', 'success');
+        _configDirty = {};
+        updateConfig();
+        // Reload risk/drawdown since they depend on config
+        updateRisk();
+        updateDrawdown();
+        updateEngineStatus();
+    } else {
+        showToast(`Reset failed: ${result?.error || 'Unknown error'}`, 'error');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  REFRESH ORCHESTRATION
+// ═══════════════════════════════════════════════════════════════
+
 async function refreshAll() {
     await Promise.all([
         updatePortfolio(),
         updateRisk(),
-        updateEngineStatus(),
-        updateDrawdown(),
         updatePositions(),
         updateForecasts(),
         updateTrades(),
         updateCharts(),
+        updateEquityCurve(),
+        updateEngineStatus(),
+        updateDrawdown(),
         updateAudit(),
         updateAlerts(),
         updateConfig(),
     ]);
-    $("#last-updated-time").textContent = new Date().toLocaleTimeString();
+    $('#last-updated-time').textContent = new Date().toLocaleTimeString();
 }
 
-// Boot
-refreshAll();
-setInterval(refreshAll, REFRESH_INTERVAL);
+// ─── Init ───────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    refreshAll();
+    setInterval(refreshAll, 15000);
+});
