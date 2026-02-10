@@ -375,9 +375,9 @@ def api_drawdown() -> Any:
         "heat_level": 0,
         "kelly_multiplier": 1.0,
         "is_killed": False,
-        "kill_switch_pct": cfg.drawdown.auto_kill_switch_pct,
-        "heat_levels": cfg.drawdown.heat_levels,
-        "heat_multipliers": cfg.drawdown.heat_kelly_multipliers,
+        "kill_switch_pct": cfg.drawdown.max_drawdown_pct,
+        "warning_pct": cfg.drawdown.warning_drawdown_pct,
+        "critical_pct": cfg.drawdown.critical_drawdown_pct,
         "max_drawdown_pct": cfg.drawdown.max_drawdown_pct,
     })
 
@@ -388,10 +388,10 @@ def api_drawdown() -> Any:
 def api_portfolio_risk() -> Any:
     cfg = _get_config()
     return jsonify({
-        "max_exposure_per_category": cfg.portfolio.max_exposure_per_type,
-        "max_exposure_per_event": cfg.portfolio.max_exposure_per_event,
+        "max_exposure_per_category": cfg.portfolio.max_category_exposure_pct,
+        "max_exposure_per_event": cfg.portfolio.max_single_event_exposure_pct,
         "max_correlated_positions": cfg.portfolio.max_correlated_positions,
-        "correlation_threshold": cfg.portfolio.correlation_threshold,
+        "correlation_threshold": cfg.portfolio.correlation_similarity_threshold,
         "category_exposures": {},
         "event_exposures": {},
         "is_healthy": True,
@@ -401,15 +401,16 @@ def api_portfolio_risk() -> Any:
 
 # ─── API: Engine Status ─────────────────────────────────────────
 
-@app.route("/api/engine")
+@app.route("/api/engine-status")
 def api_engine() -> Any:
     cfg = _get_config()
     return jsonify({
         "running": False,
-        "cycle_interval_secs": cfg.engine.cycle_interval_secs,
+        "scan_interval_minutes": cfg.engine.scan_interval_minutes,
         "max_markets_per_cycle": cfg.engine.max_markets_per_cycle,
-        "enable_continuous": cfg.engine.enable_continuous,
-        "total_cycles": 0,
+        "auto_start": cfg.engine.auto_start,
+        "paper_mode": cfg.engine.paper_mode,
+        "cycles": 0,
         "last_cycle": None,
     })
 
