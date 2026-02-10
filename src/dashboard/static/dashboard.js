@@ -744,6 +744,260 @@ async function resetConfig() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  DECISION INTELLIGENCE LOG
+// ═══════════════════════════════════════════════════════════════
+
+let _decisionExpanded = false;
+
+async function updateDecisionLog() {
+    const cycleFilter = $('#decision-cycle-filter');
+    const cycleVal = cycleFilter ? cycleFilter.value : '';
+    const url = cycleVal ? `/api/decision-log?cycle=${cycleVal}` : '/api/decision-log?limit=30';
+    const d = await apiFetch(url);
+    if (!d) return;
+
+    // Populate cycle selector (preserve current selection)
+    if (d.cycles && d.cycles.length > 0 && cycleFilter) {
+        const cur = cycleFilter.value;
+        const opts = '<option value="">All Cycles</option>' +
+            d.cycles.map(c => `<option value="${c}" ${String(c)===cur?'selected':''}>Cycle ${c}</option>`).join('');
+        cycleFilter.innerHTML = opts;
+    }
+
+    const container = $('#decision-log-container');
+    if (!d.entries || d.entries.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="padding:40px 0;">No decision data yet — run an engine cycle to see how the bot makes decisions.</div>';
+        return;
+    }
+
+    container.innerHTML = d.entries.map((e, idx) => renderDecisionCard(e, idx)).join('');
+    filterDecisionCards();
+}
+
+function renderDecisionCard(entry, idx) {
+    const decision = (entry.decision || 'SKIP').toUpperCase();
+    const decClass = decision === 'TRADE' ? 'dc-trade' :
+                     decision === 'NO TRADE' ? 'dc-no-trade' : 'dc-skip';
+    const decIcon = decision === 'TRADE' ? '✅' :
+                    decision === 'NO TRADE' ? '❌' : '⏭️';
+
+    const edgeVal = (entry.edge || 0) * 100;
+    const edgeSign = edgeVal >= 0 ? '+' : '';
+    const edgeClass = edgeVal > 0 ? 'pnl-positive' : edgeVal < 0 ? 'pnl-negative' : 'pnl-zero';
+
+    // Pipeline stages dots
+    const stageDots = (entry.stages || []).map(s => {
+        const sc = s.status === 'passed' || s.status === 'executed' ? 'stage-pass' :
+                   s.status === 'blocked' ? 'stage-block' : 'stage-skip';
+        return `<span class="stage-dot ${sc}" title="${s.icon} ${s.name}: ${s.status}">${s.icon}</span>`;
+    }).join('');
+
+    // Collapsed summary
+    const summary = `
+    <div class="dc-header" onclick="toggleDecisionDetail(${idx})">
+        <div class="dc-header-left">
+            <span class="dc-decision-badge ${decClass}">${decIcon} ${decision}</span>
+            <span class="dc-question" title="${entry.question || ''}">${(entry.question || entry.market_id || '').substring(0, 65)}</span>
+            <span class="dc-type-badge">${entry.market_type || '—'}</span>
+        </div>
+        <div class="dc-header-right">
+            <div class="dc-stages-mini">${stageDots}</div>
+            <span class="dc-metric"><span class="dc-metric-label">Edge</span> <span class="${edgeClass}">${edgeSign}${edgeVal.toFixed(1)}%</span></span>
+            <span class="dc-metric"><span class="dc-metric-label">EQ</span> ${fmt(entry.evidence_quality, 2)}</span>
+            <span class="dc-metric"><span class="dc-metric-label">Src</span> ${entry.num_sources || 0}</span>
+            <span class="dc-time">${shortDate(entry.created_at)}</span>
+            <span class="dc-expand-icon" id="dc-expand-${idx}">▶</span>
+        </div>
+    </div>`;
+
+    // Expanded detail
+    const detail = renderDecisionDetail(entry, idx);
+
+    return `<div class="decision-card ${decClass}" data-decision="${decision}" data-idx="${idx}">
+        ${summary}
+        <div class="dc-detail" id="dc-detail-${idx}" style="display:none;">${detail}</div>
+    </div>`;
+}
+
+function renderDecisionDetail(entry, idx) {
+    const stages = entry.stages || [];
+    let html = '<div class="dc-pipeline">';
+
+    stages.forEach((stage, si) => {
+        const sc = stage.status === 'passed' || stage.status === 'executed' ? 'stage-pass' :
+                   stage.status === 'blocked' ? 'stage-block' : 'stage-skip';
+        const d = stage.details || {};
+
+        html += `<div class="dc-stage ${sc}">`;
+        html += `<div class="dc-stage-header">
+            <span class="dc-stage-icon">${stage.icon}</span>
+            <span class="dc-stage-name">${stage.name}</span>
+            <span class="dc-stage-status-pill ${sc}">${stage.status.toUpperCase()}</span>
+        </div>`;
+        html += '<div class="dc-stage-body">';
+
+        if (stage.name === 'Discovery & Filter') {
+            html += '<div class="dc-kv-grid">';
+            if (d.market_type) html += kvPill('Type', d.market_type);
+            if (d.category) html += kvPill('Category', d.category);
+            if (d.resolution_source) html += kvPill('Resolution', d.resolution_source);
+            if (d.volume != null) html += kvPill('Volume', fmtD(d.volume));
+            if (d.liquidity != null) html += kvPill('Liquidity', fmtD(d.liquidity));
+            if (d.end_date) html += kvPill('Expiry', d.end_date.substring(0, 10));
+            html += '</div>';
+        }
+
+        if (stage.name === 'Research') {
+            html += '<div class="dc-kv-grid">';
+            html += kvPill('Sources', d.num_sources || 0);
+            html += kvPill('Quality', fmt(d.evidence_quality, 3));
+            html += '</div>';
+            if (d.evidence_bullets && d.evidence_bullets.length > 0) {
+                html += '<div class="dc-evidence-list">';
+                html += '<div class="dc-evidence-title">📝 Key Evidence</div>';
+                d.evidence_bullets.forEach(b => {
+                    const text = typeof b === 'string' ? b : (b.text || JSON.stringify(b));
+                    const citation = (typeof b === 'object' && b.citation) ? b.citation : null;
+                    const citStr = citation
+                        ? `<span class="dc-citation">${citation.publisher || citation.url || ''}${citation.date ? ' · ' + citation.date : ''}</span>`
+                        : '';
+                    const rel = (typeof b === 'object' && b.relevance != null)
+                        ? `<span class="dc-relevance">${(b.relevance * 100).toFixed(0)}%</span>`
+                        : '';
+                    html += `<div class="dc-evidence-item">
+                        <div class="dc-evidence-text">${escHtml(text.substring(0, 300))}</div>
+                        <div class="dc-evidence-meta">${rel}${citStr}</div>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+        }
+
+        if (stage.name === 'Forecast') {
+            html += '<div class="dc-kv-grid">';
+            html += kvPill('Implied P', fmtP((d.implied_prob || 0) * 100));
+            html += kvPill('Model P', fmtP((d.model_prob || 0) * 100));
+            const e = (d.edge || 0) * 100;
+            html += kvPillClass('Edge', (e >= 0 ? '+' : '') + e.toFixed(2) + '%', e > 0 ? 'pnl-positive' : 'pnl-negative');
+            html += kvPill('Confidence', d.confidence || '—');
+            html += '</div>';
+
+            // Edge visualization bar
+            const implPct = ((d.implied_prob || 0) * 100).toFixed(1);
+            const modPct = ((d.model_prob || 0) * 100).toFixed(1);
+            html += `<div class="dc-prob-compare">
+                <div class="dc-prob-bar-wrap">
+                    <div class="dc-prob-label">Market ${implPct}%</div>
+                    <div class="dc-prob-bar-track">
+                        <div class="dc-prob-bar dc-prob-implied" style="width:${implPct}%"></div>
+                    </div>
+                </div>
+                <div class="dc-prob-bar-wrap">
+                    <div class="dc-prob-label">Model ${modPct}%</div>
+                    <div class="dc-prob-bar-track">
+                        <div class="dc-prob-bar dc-prob-model" style="width:${modPct}%"></div>
+                    </div>
+                </div>
+            </div>`;
+
+            if (d.reasoning) {
+                html += `<div class="dc-reasoning">
+                    <div class="dc-reasoning-title">💭 LLM Reasoning</div>
+                    <div class="dc-reasoning-text">${escHtml(d.reasoning)}</div>
+                </div>`;
+            }
+            if (d.invalidation_triggers && d.invalidation_triggers.length > 0) {
+                html += `<div class="dc-triggers">
+                    <div class="dc-triggers-title">⚠️ Invalidation Triggers</div>
+                    <ul class="dc-triggers-list">
+                        ${d.invalidation_triggers.map(t => `<li>${escHtml(t)}</li>`).join('')}
+                    </ul>
+                </div>`;
+            }
+        }
+
+        if (stage.name === 'Risk Check') {
+            html += '<div class="dc-kv-grid">';
+            html += kvPillClass('Decision', d.decision || '—',
+                (d.decision || '') === 'TRADE' ? 'pnl-positive' : 'pnl-negative');
+            html += '</div>';
+            if (d.violations && d.violations.length > 0) {
+                html += '<div class="dc-violations">';
+                html += '<div class="dc-violations-title">🚫 Violations</div>';
+                d.violations.forEach(v => {
+                    html += `<div class="dc-violation-item">${escHtml(v)}</div>`;
+                });
+                html += '</div>';
+            }
+            if (d.reasons && !d.violations?.length) {
+                html += `<div class="dc-reason-text">${escHtml(d.reasons)}</div>`;
+            }
+        }
+
+        if (stage.name === 'Execution') {
+            html += '<div class="dc-kv-grid">';
+            html += kvPill('Stake', d.stake_usd ? fmtD(d.stake_usd) : '—');
+            html += kvPill('Status', d.order_status || '—');
+            html += '</div>';
+        }
+
+        html += '</div></div>'; // close body, stage
+
+        // Connector arrow between stages
+        if (si < stages.length - 1) {
+            html += '<div class="dc-stage-connector">→</div>';
+        }
+    });
+
+    html += '</div>'; // close pipeline
+    return html;
+}
+
+function kvPill(label, value) {
+    return `<div class="dc-kv"><span class="dc-kv-label">${label}</span><span class="dc-kv-value">${value}</span></div>`;
+}
+function kvPillClass(label, value, cls) {
+    return `<div class="dc-kv"><span class="dc-kv-label">${label}</span><span class="dc-kv-value ${cls}">${value}</span></div>`;
+}
+function escHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
+}
+
+function toggleDecisionDetail(idx) {
+    const detail = document.getElementById(`dc-detail-${idx}`);
+    const icon = document.getElementById(`dc-expand-${idx}`);
+    if (!detail) return;
+    const open = detail.style.display !== 'none';
+    detail.style.display = open ? 'none' : 'block';
+    if (icon) icon.textContent = open ? '▶' : '▼';
+}
+
+function toggleDecisionExpand() {
+    _decisionExpanded = !_decisionExpanded;
+    const btn = $('#btn-expand-all');
+    if (btn) btn.textContent = _decisionExpanded ? 'Collapse All' : 'Expand All';
+    const details = document.querySelectorAll('.dc-detail');
+    const icons = document.querySelectorAll('.dc-expand-icon');
+    details.forEach(d => d.style.display = _decisionExpanded ? 'block' : 'none');
+    icons.forEach(i => i.textContent = _decisionExpanded ? '▼' : '▶');
+}
+
+function filterDecisionCards() {
+    const sel = $('#decision-filter');
+    const filter = sel ? sel.value.toUpperCase() : '';
+    const cards = document.querySelectorAll('.decision-card');
+    cards.forEach(c => {
+        if (!filter || c.dataset.decision === filter) {
+            c.style.display = '';
+        } else {
+            c.style.display = 'none';
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  REFRESH ORCHESTRATION
 // ═══════════════════════════════════════════════════════════════
 
@@ -753,6 +1007,7 @@ async function refreshAll() {
         updateRisk(),
         updatePositions(),
         updateCandidates(),
+        updateDecisionLog(),
         updateForecasts(),
         updateTrades(),
         updateCharts(),

@@ -554,6 +554,184 @@ def api_filter_stats() -> Any:
         conn.close()
 
 
+# ─── API: Decision Log ──────────────────────────────────────────
+
+@app.route("/api/decision-log")
+def api_decision_log() -> Any:
+    """Rich decision log joining candidates with forecast evidence & reasoning."""
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        limit = request.args.get("limit", 50, type=int)
+        cycle_id = request.args.get("cycle", None, type=int)
+
+        # Get candidates (most recent first)
+        if cycle_id is not None:
+            cand_rows = conn.execute(
+                "SELECT * FROM candidates WHERE cycle_id = ? ORDER BY created_at DESC",
+                (cycle_id,),
+            ).fetchall()
+        else:
+            cand_rows = conn.execute(
+                "SELECT * FROM candidates ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+
+        entries: list[dict[str, Any]] = []
+        for c in cand_rows:
+            cd = dict(c)
+            market_id = cd.get("market_id", "")
+
+            # Find matching forecast (closest in time)
+            f_row = conn.execute(
+                """SELECT * FROM forecasts
+                   WHERE market_id = ?
+                   ORDER BY ABS(julianday(created_at) - julianday(?)) ASC
+                   LIMIT 1""",
+                (market_id, cd.get("created_at", "")),
+            ).fetchone()
+
+            # Parse forecast enrichment data
+            evidence_bullets: list[dict] = []
+            reasoning = ""
+            invalidation_triggers: list[str] = []
+            if f_row:
+                fd = dict(f_row)
+                reasoning = fd.get("reasoning", "") or ""
+                try:
+                    evidence_bullets = json.loads(
+                        fd.get("evidence_json", "[]") or "[]"
+                    )
+                    if not isinstance(evidence_bullets, list):
+                        evidence_bullets = []
+                except (json.JSONDecodeError, TypeError):
+                    evidence_bullets = []
+                try:
+                    invalidation_triggers = json.loads(
+                        fd.get("invalidation_triggers_json", "[]") or "[]"
+                    )
+                    if not isinstance(invalidation_triggers, list):
+                        invalidation_triggers = []
+                except (json.JSONDecodeError, TypeError):
+                    invalidation_triggers = []
+
+            # Look up market metadata
+            m_row = conn.execute(
+                "SELECT volume, liquidity, end_date, resolution_source, category "
+                "FROM markets WHERE id = ? LIMIT 1",
+                (market_id,),
+            ).fetchone()
+            market_meta = dict(m_row) if m_row else {}
+
+            # Build pipeline stages
+            stages: list[dict[str, Any]] = []
+
+            # Stage 1: Discovery & Filter
+            stages.append({
+                "name": "Discovery & Filter",
+                "icon": "🔍",
+                "status": "passed",
+                "details": {
+                    "market_type": cd.get("market_type", "UNKNOWN"),
+                    "volume": market_meta.get("volume"),
+                    "liquidity": market_meta.get("liquidity"),
+                    "end_date": market_meta.get("end_date"),
+                    "resolution_source": market_meta.get("resolution_source", ""),
+                    "category": market_meta.get("category", ""),
+                },
+            })
+
+            # Stage 2: Research
+            research_status = "passed" if cd.get("num_sources", 0) > 0 else "skipped"
+            stages.append({
+                "name": "Research",
+                "icon": "📚",
+                "status": research_status,
+                "details": {
+                    "num_sources": cd.get("num_sources", 0),
+                    "evidence_quality": cd.get("evidence_quality", 0),
+                    "evidence_bullets": evidence_bullets[:5],
+                },
+            })
+
+            # Stage 3: Forecast
+            has_forecast = cd.get("model_prob", 0) > 0
+            stages.append({
+                "name": "Forecast",
+                "icon": "🎯",
+                "status": "passed" if has_forecast else "skipped",
+                "details": {
+                    "implied_prob": cd.get("implied_prob", 0),
+                    "model_prob": cd.get("model_prob", 0),
+                    "edge": cd.get("edge", 0),
+                    "confidence": cd.get("confidence", ""),
+                    "reasoning": reasoning,
+                    "invalidation_triggers": invalidation_triggers,
+                },
+            })
+
+            # Stage 4: Risk Check
+            decision = (cd.get("decision") or "").upper()
+            reasons = cd.get("decision_reasons", "") or ""
+            risk_passed = decision == "TRADE"
+            stages.append({
+                "name": "Risk Check",
+                "icon": "⚠️",
+                "status": "passed" if risk_passed else "blocked",
+                "details": {
+                    "decision": decision,
+                    "reasons": reasons,
+                    "violations": (
+                        [r.strip() for r in reasons.split(";") if r.strip()]
+                        if not risk_passed and reasons
+                        else []
+                    ),
+                },
+            })
+
+            # Stage 5: Execution
+            if decision == "TRADE":
+                stages.append({
+                    "name": "Execution",
+                    "icon": "⚡",
+                    "status": "executed",
+                    "details": {
+                        "stake_usd": cd.get("stake_usd", 0),
+                        "order_status": cd.get("order_status", ""),
+                    },
+                })
+
+            entries.append({
+                "cycle_id": cd.get("cycle_id"),
+                "market_id": market_id,
+                "question": cd.get("question", ""),
+                "market_type": cd.get("market_type", ""),
+                "decision": decision,
+                "implied_prob": cd.get("implied_prob", 0),
+                "model_prob": cd.get("model_prob", 0),
+                "edge": cd.get("edge", 0),
+                "evidence_quality": cd.get("evidence_quality", 0),
+                "num_sources": cd.get("num_sources", 0),
+                "confidence": cd.get("confidence", ""),
+                "stake_usd": cd.get("stake_usd", 0),
+                "created_at": cd.get("created_at", ""),
+                "stages": stages,
+                "reasoning": reasoning,
+                "evidence_bullets": evidence_bullets[:5],
+                "invalidation_triggers": invalidation_triggers,
+            })
+
+        # Gather unique cycle IDs for the cycle selector
+        cycle_rows = conn.execute(
+            "SELECT DISTINCT cycle_id FROM candidates ORDER BY cycle_id DESC LIMIT 20"
+        ).fetchall()
+        cycles = [r["cycle_id"] for r in cycle_rows if r["cycle_id"] is not None]
+
+        return jsonify({"entries": entries, "cycles": cycles})
+    finally:
+        conn.close()
+
+
 # ─── API: Audit Trail ───────────────────────────────────────────
 
 @app.route("/api/audit")

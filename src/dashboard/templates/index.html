@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Polymarket Bot — Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=2">
 </head>
 <body>
     <!-- ─── Toast Container ─────────────────────────────────── -->
@@ -201,6 +201,28 @@
         </div>
     </section>
 
+    <!-- ─── Decision Intelligence Log ───────────────────────── -->
+    <section class="panel" id="decision-log-panel">
+        <div class="panel-header">
+            <h2>🧠 Decision Intelligence Log</h2>
+            <div class="panel-tools">
+                <select id="decision-cycle-filter" class="search-input" style="width:160px;" onchange="updateDecisionLog()">
+                    <option value="">All Cycles</option>
+                </select>
+                <select id="decision-filter" class="search-input" style="width:140px;" onchange="filterDecisionCards()">
+                    <option value="">All Decisions</option>
+                    <option value="TRADE">✅ Trade</option>
+                    <option value="NO TRADE">❌ No Trade</option>
+                    <option value="SKIP">⏭️ Skip</option>
+                </select>
+                <button class="btn btn-export btn-sm" onclick="toggleDecisionExpand()" id="btn-expand-all">Expand All</button>
+            </div>
+        </div>
+        <div id="decision-log-container">
+            <div class="empty-state" style="padding:40px 0;">No decision data yet — run an engine cycle to see how the bot makes decisions.</div>
+        </div>
+    </section>
+
     <!-- ─── Recent Forecasts ────────────────────────────────── -->
     <section class="panel">
         <div class="panel-header">
@@ -301,6 +323,6 @@
         <span>Auto-refreshes every 15s</span>
     </footer>
 
-    <script src="/static/dashboard.js"></script>
+    <script src="/static/dashboard.js?v=2"></script>
 </body>
 </html>
