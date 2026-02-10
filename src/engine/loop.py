@@ -8,24 +8,26 @@ Runs on a configurable cycle (default 5 minutes):
   5. Calculate edges
   6. Check risk limits
   7. Size positions
-  8. Route orders
+  8. Route orders (paper or live)
   9. Monitor existing positions for exits
 
 Between cycles:
   - Check drawdown state
   - Monitor position exits (stop-loss, take-profit, time-based)
-  - Process websocket updates
+  - Persist engine state to DB for dashboard
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 import traceback
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from src.config import load_config, is_live_trading_enabled
+from src.config import BotConfig, load_config, is_live_trading_enabled
 from src.policy.drawdown import DrawdownManager
 from src.policy.portfolio_risk import PortfolioRiskManager, PositionSnapshot
 from src.observability.logger import get_logger
@@ -46,38 +48,32 @@ class CycleResult:
     trades_attempted: int = 0
     trades_executed: int = 0
     errors: list[str] = field(default_factory=list)
-    status: str = "pending"  # "pending" | "completed" | "error" | "skipped"
+    status: str = "pending"
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__
 
 
 class TradingEngine:
-    """Continuous trading engine that coordinates all bot components.
-
-    Usage:
-        engine = TradingEngine()
-        await engine.start()  # runs until stopped
-        engine.stop()
-    """
+    """Continuous trading engine that coordinates all bot components."""
 
     def __init__(self, config: Any | None = None):
-        self.config = config or load_config()
+        self.config: BotConfig = config or load_config()
         self._running = False
         self._cycle_count = 0
         self._cycle_history: list[CycleResult] = []
 
-        # Managers
         bankroll = self.config.risk.bankroll
         self.drawdown = DrawdownManager(bankroll, self.config)
         self.portfolio = PortfolioRiskManager(bankroll, self.config)
 
-        # Callbacks for custom hooks
         self._pre_cycle_hooks: list[Callable] = []
         self._post_cycle_hooks: list[Callable] = []
-
-        # Positions tracked in-memory (loaded from DB on start)
         self._positions: list[PositionSnapshot] = []
+
+        # Database (initialised in start())
+        self._db: Any = None
+        self._audit: Any = None
 
     @property
     def is_running(self) -> bool:
@@ -93,16 +89,54 @@ class TradingEngine:
     def add_post_cycle_hook(self, fn: Callable) -> None:
         self._post_cycle_hooks.append(fn)
 
+    # ── Lifecycle ────────────────────────────────────────────────────
+
+    def _init_db(self) -> None:
+        from src.storage.database import Database
+        from src.storage.audit import AuditTrail
+        self._db = Database(self.config.storage)
+        self._db.connect()
+        self._audit = AuditTrail()
+        log.info("engine.db_connected", path=self.config.storage.sqlite_path)
+
+    def _persist_engine_state(self, extra: dict[str, Any] | None = None) -> None:
+        if not self._db:
+            return
+        try:
+            state = {
+                "running": self._running,
+                "cycle_count": self._cycle_count,
+                "live_trading": is_live_trading_enabled(),
+                "paper_mode": self.config.engine.paper_mode,
+                "last_cycle": (
+                    self._cycle_history[-1].to_dict()
+                    if self._cycle_history else None
+                ),
+                "positions": len(self._positions),
+                "scan_interval_minutes": self.config.engine.scan_interval_minutes,
+                "max_markets_per_cycle": self.config.engine.max_markets_per_cycle,
+                "auto_start": self.config.engine.auto_start,
+            }
+            if extra:
+                state.update(extra)
+            self._db.set_engine_state("engine_status", json.dumps(state))
+            dd = self.drawdown.state
+            self._db.set_engine_state("drawdown", json.dumps(dd.to_dict()))
+        except Exception as e:
+            log.warning("engine.persist_state_error", error=str(e))
+
     async def start(self) -> None:
-        """Start the continuous trading loop."""
         self._running = True
         interval = self.config.engine.cycle_interval_secs
+        self._init_db()
+        self._db.insert_alert("info", "\U0001f916 Trading engine started", "system")
         log.info(
             "engine.starting",
             interval_secs=interval,
             live_trading=is_live_trading_enabled(),
             bankroll=self.config.risk.bankroll,
         )
+        self._persist_engine_state()
 
         while self._running:
             try:
@@ -110,30 +144,30 @@ class TradingEngine:
             except Exception as e:
                 log.error("engine.cycle_error", error=str(e))
                 traceback.print_exc()
-
+                if self._db:
+                    self._db.insert_alert("error", f"Cycle error: {e}", "system")
+            self._persist_engine_state()
             if self._running:
                 log.info("engine.sleeping", seconds=interval)
                 await asyncio.sleep(interval)
 
         log.info("engine.stopped", total_cycles=self._cycle_count)
+        if self._db:
+            self._db.insert_alert("info", "\U0001f6d1 Trading engine stopped", "system")
+            self._persist_engine_state({"running": False})
 
     def stop(self) -> None:
-        """Signal the engine to stop after current cycle."""
         log.info("engine.stop_requested")
         self._running = False
 
-    async def _run_cycle(self) -> CycleResult:
-        """Execute one full trading cycle."""
-        self._cycle_count += 1
-        cycle = CycleResult(
-            cycle_id=self._cycle_count,
-            started_at=time.time(),
-        )
+    # ── Cycle ────────────────────────────────────────────────────────
 
+    async def _run_cycle(self) -> CycleResult:
+        self._cycle_count += 1
+        cycle = CycleResult(cycle_id=self._cycle_count, started_at=time.time())
         log.info("engine.cycle_start", cycle_id=cycle.cycle_id)
 
         try:
-            # Pre-cycle hooks
             for hook in self._pre_cycle_hooks:
                 try:
                     if asyncio.iscoroutinefunction(hook):
@@ -143,16 +177,16 @@ class TradingEngine:
                 except Exception as e:
                     log.warning("engine.hook_error", hook=str(hook), error=str(e))
 
-            # Check drawdown state
             can_trade, dd_reason = self.drawdown.can_trade()
             if not can_trade:
                 log.warning("engine.drawdown_halt", reason=dd_reason)
                 cycle.status = "skipped"
                 cycle.errors.append(f"Drawdown halt: {dd_reason}")
+                if self._db:
+                    self._db.insert_alert("warning", f"Cycle skipped: {dd_reason}", "risk")
                 self._finish_cycle(cycle)
                 return cycle
 
-            # Step 1: Discover markets
             markets = await self._discover_markets()
             cycle.markets_scanned = len(markets)
 
@@ -162,18 +196,14 @@ class TradingEngine:
                 self._finish_cycle(cycle)
                 return cycle
 
-            # Step 2: Score and rank markets
             candidates = await self._rank_markets(markets)
-
-            # Step 3: Research top candidates
             max_per_cycle = self.config.engine.max_markets_per_cycle
             top = candidates[:max_per_cycle]
             cycle.markets_researched = len(top)
 
-            # Step 4-7: Process each candidate
             for candidate in top:
                 try:
-                    result = await self._process_candidate(candidate)
+                    result = await self._process_candidate(candidate, cycle.cycle_id)
                     if result.get("has_edge"):
                         cycle.edges_found += 1
                     if result.get("trade_attempted"):
@@ -187,10 +217,9 @@ class TradingEngine:
                         error=str(e),
                     )
                     cycle.errors.append(str(e))
+                    traceback.print_exc()
 
-            # Step 8: Check existing positions for exits
             await self._check_positions()
-
             cycle.status = "completed"
 
         except Exception as e:
@@ -198,7 +227,6 @@ class TradingEngine:
             cycle.errors.append(str(e))
             log.error("engine.cycle_failed", error=str(e))
 
-        # Post-cycle hooks
         for hook in self._post_cycle_hooks:
             try:
                 if asyncio.iscoroutinefunction(hook):
@@ -212,12 +240,9 @@ class TradingEngine:
         return cycle
 
     def _finish_cycle(self, cycle: CycleResult) -> None:
-        """Finalize a cycle result."""
         cycle.ended_at = time.time()
         cycle.duration_secs = round(cycle.ended_at - cycle.started_at, 2)
         self._cycle_history.append(cycle)
-
-        # Keep last 100 cycles
         if len(self._cycle_history) > 100:
             self._cycle_history = self._cycle_history[-50:]
 
@@ -231,18 +256,22 @@ class TradingEngine:
             trades=cycle.trades_executed,
             status=cycle.status,
         )
+        if self._db:
+            self._db.insert_alert(
+                "info",
+                f"Cycle {cycle.cycle_id}: scanned={cycle.markets_scanned} "
+                f"researched={cycle.markets_researched} edges={cycle.edges_found} "
+                f"trades={cycle.trades_executed} ({cycle.duration_secs:.1f}s)",
+                "engine",
+            )
+
+    # ── Market Discovery ─────────────────────────────────────────────
 
     async def _discover_markets(self) -> list[Any]:
-        """Discover active markets from Polymarket.
-
-        Override this or use hooks for custom market discovery.
-        """
         from src.connectors.polymarket_gamma import fetch_active_markets
-
         try:
             markets = await fetch_active_markets(
-                min_volume=self.config.risk.min_liquidity,
-                limit=200,
+                min_volume=self.config.risk.min_liquidity, limit=200,
             )
             return markets
         except Exception as e:
@@ -250,8 +279,6 @@ class TradingEngine:
             return []
 
     async def _rank_markets(self, markets: list[Any]) -> list[Any]:
-        """Rank markets by potential (volume, liquidity, type)."""
-        # Simple ranking: prefer higher volume and liquidity
         scored = []
         for m in markets:
             score = (
@@ -263,30 +290,310 @@ class TradingEngine:
         scored.sort(key=lambda x: x[0], reverse=True)
         return [m for _, m in scored]
 
-    async def _process_candidate(self, market: Any) -> dict[str, Any]:
-        """Process a single market candidate through the full pipeline.
+    # ── Full Pipeline ────────────────────────────────────────────────
 
-        Returns dict with keys: has_edge, trade_attempted, trade_executed
-        """
+    async def _process_candidate(self, market: Any, cycle_id: int) -> dict[str, Any]:
+        """Process a single market through the full research-to-trade pipeline."""
         result = {"has_edge": False, "trade_attempted": False, "trade_executed": False}
+        market_id = market.id
+        question = market.question
 
-        # This is a framework — actual implementation wires in
-        # all the pipeline stages (research, forecast, edge, risk, sizing, execution)
-        log.debug("engine.process_candidate", market_id=market.id)
+        log.info(
+            "engine.pipeline_start",
+            market_id=market_id,
+            question=question[:80],
+            market_type=market.market_type,
+        )
 
+        # ── Stage 1: Research ────────────────────────────────────────
+        from src.research.query_builder import build_queries
+        from src.research.source_fetcher import SourceFetcher
+        from src.research.evidence_extractor import EvidenceExtractor
+        from src.connectors.web_search import create_search_provider
+
+        search_provider = create_search_provider(self.config.research.search_provider)
+        source_fetcher = SourceFetcher(search_provider, self.config.research)
+
+        try:
+            queries = build_queries(market, max_queries=6)
+            sources = await source_fetcher.fetch_sources(
+                queries, market_type=market.market_type,
+                max_sources=self.config.research.max_sources,
+            )
+            extractor = EvidenceExtractor(self.config.forecasting)
+            evidence = await extractor.extract(
+                market_id=market_id, question=question,
+                sources=sources, market_type=market.market_type,
+            )
+        except Exception as e:
+            log.error("engine.research_failed", market_id=market_id, error=str(e))
+            self._log_candidate(cycle_id, market, decision="SKIP",
+                                reason=f"Research failed: {e}")
+            return result
+        finally:
+            await source_fetcher.close()
+            await search_provider.close()
+
+        log.info(
+            "engine.research_done", market_id=market_id,
+            sources=len(sources), bullets=len(evidence.bullets),
+            quality=round(evidence.quality_score, 3),
+        )
+
+        # ── Stage 2: Build Features ──────────────────────────────────
+        from src.forecast.feature_builder import build_features
+        features = build_features(market=market, evidence=evidence)
+
+        # ── Stage 3: Forecast ────────────────────────────────────────
+        from src.forecast.llm_forecaster import LLMForecaster
+        forecaster = LLMForecaster(self.config.forecasting)
+        forecast = await forecaster.forecast(
+            features=features, evidence=evidence,
+            resolution_source=market.resolution_source,
+        )
+        log.info(
+            "engine.forecast_done", market_id=market_id,
+            implied=round(forecast.implied_probability, 3),
+            model=round(forecast.model_probability, 3),
+            edge=round(forecast.edge, 3),
+            confidence=forecast.confidence_level,
+        )
+
+        # ── Stage 4: Edge Calculation ────────────────────────────────
+        from src.policy.edge_calc import calculate_edge
+        edge_result = calculate_edge(
+            implied_prob=forecast.implied_probability,
+            model_prob=forecast.model_probability,
+            transaction_fee_pct=self.config.risk.transaction_fee_pct,
+            gas_cost_usd=self.config.risk.gas_cost_usd,
+        )
+        has_edge = edge_result.is_positive and edge_result.abs_net_edge >= self.config.risk.min_edge
+        result["has_edge"] = has_edge
+
+        # ── Stage 5: Risk Checks ─────────────────────────────────────
+        from src.policy.risk_limits import check_risk_limits
+        daily_pnl = self._db.get_daily_pnl() if self._db else 0.0
+        open_positions = self._db.get_open_positions_count() if self._db else 0
+        risk_result = check_risk_limits(
+            edge=edge_result, features=features,
+            risk_config=self.config.risk,
+            forecast_config=self.config.forecasting,
+            current_open_positions=open_positions,
+            daily_pnl=daily_pnl,
+            market_type=market.market_type,
+            allowed_types=self.config.scanning.preferred_types or None,
+            restricted_types=self.config.scanning.restricted_types or None,
+            drawdown_state=self.drawdown.state,
+        )
+
+        # ── Persist forecast to DB ───────────────────────────────────
+        if self._db:
+            from src.storage.models import ForecastRecord, MarketRecord
+            self._db.upsert_market(MarketRecord(
+                id=market_id, condition_id=market.condition_id,
+                question=question, market_type=market.market_type,
+                category=market.category, volume=market.volume,
+                liquidity=market.liquidity,
+                end_date=market.end_date.isoformat() if market.end_date else "",
+                resolution_source=market.resolution_source,
+            ))
+            self._db.insert_forecast(ForecastRecord(
+                id=str(uuid.uuid4()), market_id=market_id,
+                question=question, market_type=market.market_type,
+                implied_probability=forecast.implied_probability,
+                model_probability=forecast.model_probability,
+                edge=forecast.edge,
+                confidence_level=forecast.confidence_level,
+                evidence_quality=evidence.quality_score,
+                num_sources=evidence.num_sources,
+                decision=risk_result.decision,
+                reasoning=forecast.reasoning[:500],
+                evidence_json=json.dumps(forecast.evidence[:5]),
+                invalidation_triggers_json=json.dumps(forecast.invalidation_triggers),
+            ))
+
+        # ── Decision Gate ────────────────────────────────────────────
+        if not risk_result.allowed:
+            log.info("engine.no_trade", market_id=market_id, violations=risk_result.violations)
+            self._log_candidate(
+                cycle_id, market, forecast=forecast, evidence=evidence,
+                edge_result=edge_result, decision="NO TRADE",
+                reason="; ".join(risk_result.violations),
+            )
+            if self._audit:
+                self._audit.record_trade_decision(
+                    market_id=market_id, question=question,
+                    model_prob=forecast.model_probability,
+                    implied_prob=forecast.implied_probability,
+                    edge=forecast.edge, confidence=forecast.confidence_level,
+                    risk_result=risk_result.to_dict(), position_size=0.0,
+                    evidence_summary=evidence.summary[:200],
+                )
+            return result
+
+        # ── Stage 6: Position Sizing ─────────────────────────────────
+        from src.policy.position_sizer import calculate_position_size
+        position = calculate_position_size(
+            edge=edge_result, risk_config=self.config.risk,
+            confidence_level=forecast.confidence_level,
+            drawdown_multiplier=self.drawdown.state.kelly_multiplier,
+            timeline_multiplier=features.time_decay_multiplier,
+            price_volatility=features.price_volatility,
+        )
+        if position.stake_usd < 1.0:
+            log.info("engine.stake_too_small", market_id=market_id, stake=position.stake_usd)
+            self._log_candidate(
+                cycle_id, market, forecast=forecast, evidence=evidence,
+                edge_result=edge_result, decision="NO TRADE",
+                reason="Stake too small", stake=position.stake_usd,
+            )
+            return result
+
+        result["trade_attempted"] = True
+
+        # ── Stage 7: Build & Route Order ─────────────────────────────
+        from src.execution.order_builder import build_order
+        from src.execution.order_router import OrderRouter
+        from src.connectors.polymarket_clob import CLOBClient
+
+        yes_tokens = [t for t in market.tokens if t.outcome.lower() == "yes"]
+        no_tokens = [t for t in market.tokens if t.outcome.lower() == "no"]
+        if edge_result.direction == "BUY_YES" and yes_tokens:
+            token_id = yes_tokens[0].token_id
+            implied_price = yes_tokens[0].price or forecast.implied_probability
+        elif edge_result.direction == "BUY_NO" and no_tokens:
+            token_id = no_tokens[0].token_id
+            implied_price = no_tokens[0].price or (1 - forecast.implied_probability)
+        else:
+            token_id = (yes_tokens[0].token_id if yes_tokens
+                        else (no_tokens[0].token_id if no_tokens else ""))
+            implied_price = forecast.implied_probability
+        if not token_id:
+            log.warning("engine.no_token_id", market_id=market_id)
+            self._log_candidate(
+                cycle_id, market, forecast=forecast, evidence=evidence,
+                edge_result=edge_result, decision="NO TRADE",
+                reason="No token ID available",
+            )
+            return result
+
+        orders = build_order(
+            market_id=market_id, token_id=token_id,
+            position=position, implied_price=implied_price,
+            config=self.config.execution, execution_strategy="simple",
+        )
+
+        clob = CLOBClient()
+        router = OrderRouter(clob, self.config.execution)
+        order_statuses: list[str] = []
+        try:
+            for order in orders:
+                order_result = await router.submit_order(order)
+                order_statuses.append(order_result.status)
+                log.info(
+                    "engine.order_result", market_id=market_id,
+                    order_id=order_result.order_id[:8],
+                    status=order_result.status,
+                    fill_price=order_result.fill_price,
+                    fill_size=order_result.fill_size,
+                )
+                if self._db:
+                    from src.storage.models import TradeRecord, PositionRecord
+                    self._db.insert_trade(TradeRecord(
+                        id=str(uuid.uuid4()),
+                        order_id=order_result.order_id,
+                        market_id=market_id, token_id=token_id,
+                        side=edge_result.direction,
+                        price=order_result.fill_price,
+                        size=order_result.fill_size,
+                        stake_usd=position.stake_usd,
+                        status=order_result.status.upper(),
+                        dry_run=order_result.status == "simulated",
+                    ))
+                    self._db.upsert_position(PositionRecord(
+                        market_id=market_id, token_id=token_id,
+                        direction=edge_result.direction,
+                        entry_price=order_result.fill_price,
+                        size=order_result.fill_size,
+                        stake_usd=position.stake_usd,
+                        current_price=order_result.fill_price, pnl=0.0,
+                    ))
+                result["trade_executed"] = True
+        finally:
+            await clob.close()
+
+        # ── Stage 8: Audit ───────────────────────────────────────────
+        if self._audit:
+            self._audit.record_trade_decision(
+                market_id=market_id, question=question,
+                model_prob=forecast.model_probability,
+                implied_prob=forecast.implied_probability,
+                edge=forecast.edge, confidence=forecast.confidence_level,
+                risk_result=risk_result.to_dict(),
+                position_size=position.stake_usd,
+                order_id=orders[0].order_id if orders else "",
+                evidence_summary=evidence.summary[:200],
+            )
+
+        self._log_candidate(
+            cycle_id, market, forecast=forecast, evidence=evidence,
+            edge_result=edge_result, decision="TRADE",
+            reason="All checks passed", stake=position.stake_usd,
+            order_status=order_statuses[0] if order_statuses else "",
+        )
+        if self._db:
+            mode = "\U0001f9ea Paper" if order_statuses and order_statuses[0] == "simulated" else "\U0001f4b0 Live"
+            self._db.insert_alert(
+                "info",
+                f'{mode} trade: {edge_result.direction} on "{question[:60]}" '
+                f"\u2014 stake ${position.stake_usd:.2f}, edge {forecast.edge:+.3f}, "
+                f"confidence {forecast.confidence_level}",
+                "trade", market_id,
+            )
+        log.info(
+            "engine.trade_executed", market_id=market_id,
+            direction=edge_result.direction, stake=position.stake_usd,
+            edge=round(forecast.edge, 3), status=order_statuses,
+        )
         return result
 
+    def _log_candidate(
+        self, cycle_id: int, market: Any,
+        forecast: Any = None, evidence: Any = None,
+        edge_result: Any = None,
+        decision: str = "SKIP", reason: str = "",
+        stake: float = 0.0, order_status: str = "",
+    ) -> None:
+        if not self._db:
+            return
+        try:
+            self._db.insert_candidate(
+                cycle_id=cycle_id, market_id=market.id,
+                question=market.question[:200],
+                market_type=market.market_type,
+                implied_prob=(getattr(forecast, "implied_probability", market.best_bid)
+                              if forecast else market.best_bid),
+                model_prob=(getattr(forecast, "model_probability", 0.0)
+                            if forecast else 0.0),
+                edge=getattr(forecast, "edge", 0.0) if forecast else 0.0,
+                evidence_quality=(getattr(evidence, "quality_score", 0.0)
+                                  if evidence else 0.0),
+                num_sources=(getattr(evidence, "num_sources", 0)
+                             if evidence else 0),
+                confidence=(getattr(forecast, "confidence_level", "")
+                            if forecast else ""),
+                decision=decision, decision_reasons=reason[:300],
+                stake_usd=stake, order_status=order_status,
+            )
+        except Exception as e:
+            log.warning("engine.log_candidate_error", error=str(e))
+
     async def _check_positions(self) -> None:
-        """Check existing positions for exit conditions."""
-        # Framework for position monitoring
-        # Actual exit logic lives in position_manager.py
         pass
 
     def get_status(self) -> dict[str, Any]:
-        """Get current engine status for dashboard."""
         dd_state = self.drawdown.state
         pr_report = self.portfolio.assess(self._positions)
-
         return {
             "running": self._running,
             "cycle_count": self._cycle_count,
@@ -295,8 +602,7 @@ class TradingEngine:
             "portfolio": pr_report.to_dict(),
             "last_cycle": (
                 self._cycle_history[-1].to_dict()
-                if self._cycle_history
-                else None
+                if self._cycle_history else None
             ),
             "positions": len(self._positions),
         }

@@ -170,3 +170,93 @@ class Database:
     def remove_position(self, market_id: str) -> None:
         self.conn.execute("DELETE FROM positions WHERE market_id = ?", (market_id,))
         self.conn.commit()
+
+    # ── Engine State ─────────────────────────────────────────────────
+
+    def set_engine_state(self, key: str, value: str) -> None:
+        """Persist engine state (for cross-process dashboard reads)."""
+        import time as _time
+        self.conn.execute(
+            "INSERT OR REPLACE INTO engine_state (key, value, updated_at) VALUES (?, ?, ?)",
+            (key, value, _time.time()),
+        )
+        self.conn.commit()
+
+    def get_engine_state(self, key: str) -> str | None:
+        row = self.conn.execute(
+            "SELECT value FROM engine_state WHERE key = ?", (key,)
+        ).fetchone()
+        return row["value"] if row else None
+
+    def get_all_engine_state(self) -> dict[str, str]:
+        rows = self.conn.execute("SELECT key, value FROM engine_state").fetchall()
+        return {r["key"]: r["value"] for r in rows}
+
+    # ── Candidate Log ────────────────────────────────────────────────
+
+    def insert_candidate(
+        self,
+        cycle_id: int,
+        market_id: str,
+        question: str,
+        market_type: str,
+        implied_prob: float,
+        model_prob: float,
+        edge: float,
+        evidence_quality: float,
+        num_sources: int,
+        confidence: str,
+        decision: str,
+        decision_reasons: str,
+        stake_usd: float,
+        order_status: str,
+    ) -> None:
+        import datetime as _dt
+        self.conn.execute(
+            """INSERT INTO candidates
+                (cycle_id, market_id, question, market_type, implied_prob,
+                 model_prob, edge, evidence_quality, num_sources, confidence,
+                 decision, decision_reasons, stake_usd, order_status, created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                cycle_id, market_id, question, market_type, implied_prob,
+                model_prob, edge, evidence_quality, num_sources, confidence,
+                decision, decision_reasons, stake_usd, order_status,
+                _dt.datetime.now(_dt.timezone.utc).isoformat(),
+            ),
+        )
+        self.conn.commit()
+
+    def get_candidates(self, limit: int = 100) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM candidates ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ── Alerts Log ───────────────────────────────────────────────────
+
+    def insert_alert(self, level: str, message: str, channel: str = "system", market_id: str = "") -> None:
+        import datetime as _dt
+        self.conn.execute(
+            "INSERT INTO alerts_log (level, channel, message, market_id, created_at) VALUES (?,?,?,?,?)",
+            (level, channel, message, market_id, _dt.datetime.now(_dt.timezone.utc).isoformat()),
+        )
+        self.conn.commit()
+
+    def get_alerts(self, limit: int = 50) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM alerts_log ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ── Trades (extended) ────────────────────────────────────────────
+
+    def get_trades(self, limit: int = 100) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM trades ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_open_positions(self) -> list[dict]:
+        rows = self.conn.execute("SELECT * FROM positions").fetchall()
+        return [dict(r) for r in rows]

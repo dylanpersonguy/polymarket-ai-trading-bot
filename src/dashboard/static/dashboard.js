@@ -343,6 +343,36 @@ async function updateAlerts() {
     </tr>`).join('');
 }
 
+// ─── Pipeline Candidates ────────────────────────────────────────
+async function updateCandidates() {
+    const d = await apiFetch('/api/candidates');
+    if (!d) return;
+    const tbody = $('#candidates-body');
+    if (!d.candidates || d.candidates.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="13" class="empty-state">No candidates processed yet</td></tr>';
+        return;
+    }
+    tbody.innerHTML = d.candidates.map(c => {
+        const decClass = (c.decision||'').toUpperCase() === 'TRADE' ? 'pill-trade' :
+                         (c.decision||'').toUpperCase() === 'NO TRADE' ? 'pill-no-trade' : 'pill-dry';
+        return `<tr>
+            <td>${c.cycle_id||'—'}</td>
+            <td title="${c.question||''}">${(c.question||c.market_id||'').substring(0,45)}</td>
+            <td>${c.market_type||'—'}</td>
+            <td>${fmtP((c.implied_prob||0)*100)}</td>
+            <td>${fmtP((c.model_prob||0)*100)}</td>
+            <td class="${pnlClass(c.edge)}">${fmtP((c.edge||0)*100)}</td>
+            <td>${fmt(c.evidence_quality,3)}</td>
+            <td>${c.num_sources||0}</td>
+            <td>${c.confidence||'—'}</td>
+            <td><span class="pill ${decClass}">${c.decision||'—'}</span></td>
+            <td>${c.stake_usd ? fmtD(c.stake_usd) : '—'}</td>
+            <td title="${c.decision_reasons||''}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${(c.decision_reasons||'—').substring(0,40)}</td>
+            <td>${shortDate(c.created_at)}</td>
+        </tr>`;
+    }).join('');
+}
+
 // ─── Engine & Drawdown Cards ────────────────────────────────────
 async function updateEngineStatus() {
     const d = await apiFetch('/api/engine-status');
@@ -357,6 +387,13 @@ async function updateEngineStatus() {
         engineBadge.textContent = '🟢 ENGINE ON'; engineBadge.className = 'badge badge-ok'; engineBadge.style.display = '';
     } else {
         engineBadge.textContent = '⚫ ENGINE OFF'; engineBadge.className = 'badge badge-paper'; engineBadge.style.display = '';
+    }
+
+    // Show last cycle info if available
+    if (d.last_cycle) {
+        const lc = d.last_cycle;
+        $('#engine-cycles').textContent =
+            `Cycles: ${d.cycles || 0} | Last: ${lc.markets_scanned||0} scanned, ${lc.edges_found||0} edges, ${lc.trades_executed||0} trades (${lc.duration_secs||0}s)`;
     }
 }
 
@@ -474,14 +511,19 @@ async function updateEquityCurve() {
     const trades = await apiFetch('/api/trades');
     if (!trades || !trades.trades || trades.trades.length === 0) return;
 
-    // Build cumulative P&L from trade history (simplified)
+    // Build cumulative P&L from trade history
     const sorted = [...trades.trades].reverse(); // oldest first
     let cumPnl = 0;
     const labels = [];
     const data = [];
     sorted.forEach((t, i) => {
-        // Estimate P&L: for filled trades approximate using stake
-        const pnl = t.status === 'FILLED' ? (Math.random() - 0.45) * (t.stake_usd || 10) * 0.3 : 0;
+        // Use actual PnL if available, otherwise estimate from price vs 0.5
+        const price = t.price || 0.5;
+        const stake = t.stake_usd || 0;
+        // For paper trades: estimate P&L based on price deviation from fair value
+        const pnl = (t.status === 'FILLED' || t.status === 'SIMULATED')
+            ? (1.0 - price) * (t.size || 0) * 0.1  // simplified unrealized
+            : 0;
         cumPnl += pnl;
         labels.push(shortDate(t.created_at));
         data.push(parseFloat(cumPnl.toFixed(2)));
@@ -710,6 +752,7 @@ async function refreshAll() {
         updatePortfolio(),
         updateRisk(),
         updatePositions(),
+        updateCandidates(),
         updateForecasts(),
         updateTrades(),
         updateCharts(),

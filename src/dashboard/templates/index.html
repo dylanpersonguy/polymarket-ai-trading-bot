@@ -179,6 +179,28 @@
         </div>
     </section>
 
+    <!-- ─── Pipeline Candidates Log ───────────────────────────── -->
+    <section class="panel">
+        <div class="panel-header">
+            <h2>🔬 Pipeline Candidates</h2>
+            <div class="panel-tools">
+                <input type="text" class="search-input" placeholder="🔍 Filter candidates..." oninput="filterTable('candidates-body', this.value)">
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table id="candidates-table">
+                <thead><tr>
+                    <th>Cycle</th><th>Market</th><th>Type</th><th>Implied P</th><th>Model P</th>
+                    <th>Edge</th><th>EQ</th><th>Sources</th><th>Confidence</th>
+                    <th>Decision</th><th>Stake</th><th>Reason</th><th>Time</th>
+                </tr></thead>
+                <tbody id="candidates-body">
+                    <tr><td colspan="13" class="empty-state">No candidates processed yet</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
     <!-- ─── Recent Forecasts ────────────────────────────────── -->
     <section class="panel">
         <div class="panel-header">

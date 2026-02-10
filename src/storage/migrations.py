@@ -8,7 +8,7 @@ from src.observability.logger import get_logger
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -210,6 +210,57 @@ _MIGRATIONS: dict[int, list[str]] = {
         """,
         """
         CREATE INDEX IF NOT EXISTS idx_events_timestamp ON event_triggers(timestamp);
+        """,
+    ],
+    3: [
+        # Engine state — persisted between engine and dashboard processes
+        """
+        CREATE TABLE IF NOT EXISTS engine_state (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at REAL
+        );
+        """,
+        # Candidate log — every market evaluated per cycle
+        """
+        CREATE TABLE IF NOT EXISTS candidates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cycle_id INTEGER NOT NULL,
+            market_id TEXT NOT NULL,
+            question TEXT,
+            market_type TEXT,
+            implied_prob REAL,
+            model_prob REAL,
+            edge REAL,
+            evidence_quality REAL,
+            num_sources INTEGER DEFAULT 0,
+            confidence TEXT,
+            decision TEXT,
+            decision_reasons TEXT,
+            stake_usd REAL DEFAULT 0,
+            order_status TEXT DEFAULT '',
+            created_at TEXT
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_candidates_cycle ON candidates(cycle_id);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_candidates_created ON candidates(created_at);
+        """,
+        # Alerts log — persisted alerts for dashboard
+        """
+        CREATE TABLE IF NOT EXISTS alerts_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            level TEXT NOT NULL,
+            channel TEXT DEFAULT 'system',
+            message TEXT NOT NULL,
+            market_id TEXT DEFAULT '',
+            created_at TEXT
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts_log(created_at);
         """,
     ],
 }

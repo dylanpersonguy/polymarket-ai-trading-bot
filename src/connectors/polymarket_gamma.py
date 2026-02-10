@@ -171,6 +171,27 @@ class GammaClient:
         return mkt
 
 
+# ── Convenience helpers ──────────────────────────────────────────────
+
+async def fetch_active_markets(
+    *,
+    min_volume: float = 0.0,
+    limit: int = 100,
+) -> list[GammaMarket]:
+    """Fetch active markets, optionally filtering by minimum volume.
+
+    This is a convenience wrapper used by the trading engine.
+    """
+    client = GammaClient()
+    try:
+        markets = await client.list_markets(limit=limit, active=True, closed=False)
+        if min_volume > 0:
+            markets = [m for m in markets if m.volume >= min_volume]
+        return markets
+    finally:
+        await client.close()
+
+
 # ── Parsing helpers ──────────────────────────────────────────────────
 
 def parse_market(raw: dict[str, Any]) -> GammaMarket:

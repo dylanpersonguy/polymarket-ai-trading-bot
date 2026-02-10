@@ -80,6 +80,24 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
             entry_price REAL, size REAL, stake_usd REAL,
             current_price REAL, pnl REAL, opened_at TEXT
         );
+        CREATE TABLE IF NOT EXISTS engine_state (
+            key TEXT PRIMARY KEY, value TEXT, updated_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS candidates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cycle_id INTEGER, market_id TEXT, question TEXT, market_type TEXT,
+            implied_prob REAL, model_prob REAL, edge REAL,
+            evidence_quality REAL, num_sources INTEGER, confidence TEXT,
+            decision TEXT, decision_reasons TEXT,
+            stake_usd REAL DEFAULT 0, order_status TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS alerts_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            level TEXT DEFAULT 'info', channel TEXT DEFAULT 'system',
+            message TEXT, market_id TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
     """)
 
 
@@ -371,6 +389,31 @@ def api_metrics() -> Any:
 @app.route("/api/drawdown")
 def api_drawdown() -> Any:
     cfg = _get_config()
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        row = conn.execute(
+            "SELECT value FROM engine_state WHERE key = 'drawdown'"
+        ).fetchone()
+        if row:
+            dd = json.loads(row["value"])
+            return jsonify({
+                "peak_equity": dd.get("peak_equity", cfg.risk.bankroll),
+                "current_equity": dd.get("current_equity", cfg.risk.bankroll),
+                "drawdown_pct": dd.get("drawdown_pct", 0.0),
+                "heat_level": dd.get("heat_level", 0),
+                "kelly_multiplier": dd.get("kelly_multiplier", 1.0),
+                "is_killed": dd.get("is_killed", False),
+                "kill_switch_pct": cfg.drawdown.max_drawdown_pct,
+                "warning_pct": cfg.drawdown.warning_drawdown_pct,
+                "critical_pct": cfg.drawdown.critical_drawdown_pct,
+                "max_drawdown_pct": cfg.drawdown.max_drawdown_pct,
+            })
+    except Exception:
+        pass
+    finally:
+        conn.close()
+    # Fallback when engine hasn't started yet
     return jsonify({
         "peak_equity": cfg.risk.bankroll,
         "current_equity": cfg.risk.bankroll,
@@ -407,6 +450,30 @@ def api_portfolio_risk() -> Any:
 @app.route("/api/engine-status")
 def api_engine() -> Any:
     cfg = _get_config()
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        row = conn.execute(
+            "SELECT value FROM engine_state WHERE key = 'engine_status'"
+        ).fetchone()
+        if row:
+            state = json.loads(row["value"])
+            return jsonify({
+                "running": state.get("running", False),
+                "scan_interval_minutes": state.get("scan_interval_minutes", cfg.engine.scan_interval_minutes),
+                "max_markets_per_cycle": state.get("max_markets_per_cycle", cfg.engine.max_markets_per_cycle),
+                "auto_start": state.get("auto_start", cfg.engine.auto_start),
+                "paper_mode": state.get("paper_mode", cfg.engine.paper_mode),
+                "cycles": state.get("cycle_count", 0),
+                "last_cycle": state.get("last_cycle"),
+                "live_trading": state.get("live_trading", False),
+                "positions": state.get("positions", 0),
+            })
+    except Exception:
+        pass
+    finally:
+        conn.close()
+    # Fallback when engine hasn't started yet
     return jsonify({
         "running": False,
         "scan_interval_minutes": cfg.engine.scan_interval_minutes,
@@ -422,7 +489,47 @@ def api_engine() -> Any:
 
 @app.route("/api/alerts")
 def api_alerts() -> Any:
-    return jsonify({"alerts": []})
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        # Check if alerts_log table exists
+        table_exists = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='alerts_log'"
+        ).fetchone()
+        if not table_exists:
+            return jsonify({"alerts": []})
+
+        rows = conn.execute(
+            "SELECT * FROM alerts_log ORDER BY created_at DESC LIMIT 50"
+        ).fetchall()
+        alerts = [dict(r) for r in rows]
+        return jsonify({"alerts": alerts})
+    finally:
+        conn.close()
+
+
+# ─── API: Candidates Log ────────────────────────────────────────
+
+@app.route("/api/candidates")
+def api_candidates() -> Any:
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        # Check if candidates table exists
+        table_exists = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='candidates'"
+        ).fetchone()
+        if not table_exists:
+            return jsonify({"candidates": []})
+
+        limit = request.args.get("limit", 100, type=int)
+        rows = conn.execute(
+            "SELECT * FROM candidates ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        candidates = [dict(r) for r in rows]
+        return jsonify({"candidates": candidates})
+    finally:
+        conn.close()
 
 
 # ─── API: Audit Trail ───────────────────────────────────────────
