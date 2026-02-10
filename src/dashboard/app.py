@@ -532,6 +532,28 @@ def api_candidates() -> Any:
         conn.close()
 
 
+# ─── API: Filter Stats ──────────────────────────────────────────
+
+@app.route("/api/filter-stats")
+def api_filter_stats() -> Any:
+    """Return the last pre-research filter stats from the engine."""
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        row = conn.execute(
+            "SELECT value FROM engine_state WHERE key = 'engine_status'"
+        ).fetchone()
+        if not row:
+            return jsonify({"filter_stats": None, "research_cache_size": 0})
+        state = json.loads(row["value"])
+        return jsonify({
+            "filter_stats": state.get("filter_stats"),
+            "research_cache_size": state.get("research_cache_size", 0),
+        })
+    finally:
+        conn.close()
+
+
 # ─── API: Audit Trail ───────────────────────────────────────────
 
 @app.route("/api/audit")

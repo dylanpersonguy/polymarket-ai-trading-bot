@@ -30,6 +30,7 @@ from typing import Any, Callable
 from src.config import BotConfig, load_config, is_live_trading_enabled
 from src.policy.drawdown import DrawdownManager
 from src.policy.portfolio_risk import PortfolioRiskManager, PositionSnapshot
+from src.engine.market_filter import ResearchCache, filter_markets, FilterStats
 from src.observability.logger import get_logger
 
 log = get_logger(__name__)
@@ -70,6 +71,12 @@ class TradingEngine:
         self._pre_cycle_hooks: list[Callable] = []
         self._post_cycle_hooks: list[Callable] = []
         self._positions: list[PositionSnapshot] = []
+
+        # Pre-research filter
+        self._research_cache = ResearchCache(
+            cooldown_minutes=self.config.scanning.research_cooldown_minutes,
+        )
+        self._last_filter_stats: FilterStats | None = None
 
         # Database (initialised in start())
         self._db: Any = None
@@ -116,6 +123,11 @@ class TradingEngine:
                 "scan_interval_minutes": self.config.engine.scan_interval_minutes,
                 "max_markets_per_cycle": self.config.engine.max_markets_per_cycle,
                 "auto_start": self.config.engine.auto_start,
+                "filter_stats": (
+                    self._last_filter_stats.__dict__
+                    if self._last_filter_stats else None
+                ),
+                "research_cache_size": self._research_cache.size(),
             }
             if extra:
                 state.update(extra)
@@ -196,14 +208,38 @@ class TradingEngine:
                 self._finish_cycle(cycle)
                 return cycle
 
-            candidates = await self._rank_markets(markets)
+            # Pre-research filter — skip low-quality markets before SerpAPI
+            blocked_types = set(self.config.scanning.filter_blocked_types)
+            preferred_types = self.config.scanning.preferred_types or None
+            min_score = self.config.scanning.filter_min_score
             max_per_cycle = self.config.engine.max_markets_per_cycle
-            top = candidates[:max_per_cycle]
-            cycle.markets_researched = len(top)
 
-            for candidate in top:
+            self._research_cache.clear_stale()
+
+            filtered, fstats = filter_markets(
+                markets,
+                min_score=min_score,
+                max_pass=max_per_cycle,
+                research_cache=self._research_cache,
+                blocked_types=blocked_types,
+                preferred_types=preferred_types,
+            )
+            self._last_filter_stats = fstats
+            cycle.markets_researched = len(filtered)
+
+            if not filtered:
+                log.info("engine.all_filtered", stats=fstats.__dict__)
+                cycle.status = "completed"
+                self._finish_cycle(cycle)
+                return cycle
+
+            for candidate in filtered:
                 try:
                     result = await self._process_candidate(candidate, cycle.cycle_id)
+                    # Mark as researched so it's skipped for cooldown period
+                    self._research_cache.mark_researched(
+                        getattr(candidate, "id", ""),
+                    )
                     if result.get("has_edge"):
                         cycle.edges_found += 1
                     if result.get("trade_attempted"):
@@ -611,4 +647,9 @@ class TradingEngine:
                 if self._cycle_history else None
             ),
             "positions": len(self._positions),
+            "filter_stats": (
+                self._last_filter_stats.__dict__
+                if self._last_filter_stats else None
+            ),
+            "research_cache_size": self._research_cache.size(),
         }

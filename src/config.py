@@ -30,6 +30,10 @@ class ScanningConfig(BaseModel):
     batch_size: int = 50
     preferred_types: list[str] = Field(default_factory=lambda: ["MACRO", "ELECTION", "CORPORATE"])
     restricted_types: list[str] = Field(default_factory=lambda: ["WEATHER", "SPORTS"])
+    # Pre-research filter settings
+    filter_min_score: int = 45
+    filter_blocked_types: list[str] = Field(default_factory=lambda: ["UNKNOWN"])
+    research_cooldown_minutes: int = 30
 
 
 class ResearchConfig(BaseModel):
@@ -200,7 +204,7 @@ class EngineConfig(BaseModel):
     research_interval_minutes: int = 30
     position_check_interval_minutes: int = 5
     max_concurrent_research: int = 3
-    max_markets_per_cycle: int = 20
+    max_markets_per_cycle: int = 5
     auto_start: bool = False
     paper_mode: bool = True
     cycle_interval_secs: int = 300  # 5 minutes between full cycles
