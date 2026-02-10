@@ -898,19 +898,50 @@ function renderDecisionCard(entry, idx) {
         return `<span class="stage-dot ${sc}" title="${s.icon} ${s.name}: ${s.status}">${s.icon}</span>`;
     }).join('');
 
-    // Collapsed summary
+    // Grade badge
+    const grade = entry.di_grade || '—';
+    const gradeColorClass = grade.startsWith('A') ? 'grade-a' :
+                            grade.startsWith('B') ? 'grade-b' :
+                            grade.startsWith('C') ? 'grade-c' :
+                            grade.startsWith('D') ? 'grade-d' : 'grade-f';
+
+    // Category badge
+    const catBadge = entry.category
+        ? `<span class="dc-category-badge" title="Category: ${entry.category}">${categoryIcon(entry.category)} ${entry.category}</span>`
+        : '';
+
+    // Mini probability bar
+    const implPct = ((entry.implied_prob || 0) * 100).toFixed(0);
+    const modPct = ((entry.model_prob || 0) * 100).toFixed(0);
+    const miniProbBar = `<div class="dc-mini-prob" title="Market ${implPct}% → Model ${modPct}%">
+        <div class="dc-mini-prob-track">
+            <div class="dc-mini-prob-implied" style="width:${implPct}%"></div>
+            <div class="dc-mini-prob-model" style="width:${modPct}%"></div>
+        </div>
+        <span class="dc-mini-prob-label">${implPct}→${modPct}%</span>
+    </div>`;
+
+    // Confidence indicator
+    const conf = (entry.confidence || '').toLowerCase();
+    const confDot = conf === 'high' ? 'conf-high' : conf === 'medium' ? 'conf-med' : conf === 'low' ? 'conf-low' : 'conf-none';
+    const confLabel = conf || '—';
+
+    // Collapsed summary — enhanced
     const summary = `
     <div class="dc-header" onclick="toggleDecisionDetail(${idx})">
         <div class="dc-header-left">
+            <span class="dc-grade-badge ${gradeColorClass}" title="Decision Intelligence Score: ${entry.di_score || 0}/100">${grade}</span>
             <span class="dc-decision-badge ${decClass}">${decIcon} ${decision}</span>
-            <span class="dc-question" title="${entry.question || ''}">${(entry.question || entry.market_id || '').substring(0, 65)}</span>
-            <span class="dc-type-badge">${entry.market_type || '—'}</span>
+            <span class="dc-question" title="${entry.question || ''}">${escHtml((entry.question || entry.market_id || '').substring(0, 80))}</span>
         </div>
         <div class="dc-header-right">
+            ${catBadge}
+            <span class="dc-type-badge">${entry.market_type || '—'}</span>
             <div class="dc-stages-mini">${stageDots}</div>
+            ${miniProbBar}
             <span class="dc-metric"><span class="dc-metric-label">Edge</span> <span class="${edgeClass}">${edgeSign}${edgeVal.toFixed(1)}%</span></span>
             <span class="dc-metric"><span class="dc-metric-label">EQ</span> ${fmt(entry.evidence_quality, 2)}</span>
-            <span class="dc-metric"><span class="dc-metric-label">Src</span> ${entry.num_sources || 0}</span>
+            <div class="dc-conf-indicator ${confDot}" title="Confidence: ${confLabel}"><span class="dc-conf-dot"></span><span class="dc-conf-text">${confLabel}</span></div>
             <span class="dc-time">${shortDate(entry.created_at)}</span>
             <span class="dc-expand-icon" id="dc-expand-${idx}">▶</span>
         </div>
@@ -926,9 +957,131 @@ function renderDecisionCard(entry, idx) {
     </div>`;
 }
 
+function categoryIcon(cat) {
+    const icons = {
+        MACRO: '📈', ELECTION: '🗳️', CRYPTO: '₿', CORPORATE: '🏢',
+        LEGAL: '⚖️', SCIENCE: '🔬', TECH: '💻', SPORTS: '🏆',
+        WEATHER: '🌦️', GEOPOLITICS: '🌍', SOCIAL_MEDIA: '📱', UNKNOWN: '❓'
+    };
+    return icons[(cat || '').toUpperCase()] || '❓';
+}
+
 function renderDecisionDetail(entry, idx) {
     const stages = entry.stages || [];
-    let html = '<div class="dc-pipeline">';
+    const decision = (entry.decision || 'SKIP').toUpperCase();
+    const decClass = decision === 'TRADE' ? 'dc-trade' :
+                     decision === 'NO TRADE' ? 'dc-no-trade' : 'dc-skip';
+
+    // ── Decision Summary Panel ──
+    const grade = entry.di_grade || '—';
+    const diScore = entry.di_score || 0;
+    const gradeColorClass = grade.startsWith('A') ? 'grade-a' :
+                            grade.startsWith('B') ? 'grade-b' :
+                            grade.startsWith('C') ? 'grade-c' :
+                            grade.startsWith('D') ? 'grade-d' : 'grade-f';
+
+    const edgeVal = (entry.edge || 0) * 100;
+    const implPct = ((entry.implied_prob || 0) * 100).toFixed(1);
+    const modPct = ((entry.model_prob || 0) * 100).toFixed(1);
+    const eq = entry.evidence_quality || 0;
+    const researchability = entry.researchability || 0;
+    const conf = (entry.confidence || '—').toLowerCase();
+    const confPercent = conf === 'high' ? 85 : conf === 'medium' ? 55 : conf === 'low' ? 25 : 0;
+    const completeness = entry.pipeline_completeness || 0;
+
+    // Verdict text
+    const verdictIcon = decision === 'TRADE' ? '🟢' : decision === 'NO TRADE' ? '🔴' : '🟡';
+    const verdictText = decision === 'TRADE'
+        ? `Trade executed with ${edgeVal >= 0 ? '+' : ''}${edgeVal.toFixed(1)}% edge and ${conf} confidence`
+        : decision === 'NO TRADE'
+        ? `Trade rejected — insufficient edge or failed risk checks`
+        : `Market skipped during pipeline evaluation`;
+
+    // Reasons
+    const reasonsList = (entry.decision_reasons_list || []).map(r =>
+        `<li>${escHtml(r)}</li>`
+    ).join('');
+
+    let html = '';
+
+    // ═══ DECISION SUMMARY PANEL ═══
+    html += `<div class="dc-summary-panel ${decClass}">
+        <div class="dc-summary-header">
+            <div class="dc-summary-verdict">
+                <span class="dc-verdict-icon">${verdictIcon}</span>
+                <div class="dc-verdict-text-wrap">
+                    <div class="dc-verdict-label">DECISION VERDICT</div>
+                    <div class="dc-verdict-text">${escHtml(verdictText)}</div>
+                </div>
+            </div>
+            <div class="dc-summary-grade">
+                <div class="dc-grade-circle ${gradeColorClass}">
+                    <span class="dc-grade-letter">${grade}</span>
+                    <span class="dc-grade-score">${diScore}/100</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="dc-summary-question">
+            <span class="dc-full-question">${escHtml(entry.question || '')}</span>
+        </div>
+
+        <div class="dc-summary-metrics">
+            <div class="dc-summary-metric">
+                <div class="dc-sm-label">Market Price</div>
+                <div class="dc-sm-value">${implPct}%</div>
+                <div class="dc-sm-bar"><div class="dc-sm-fill dc-sm-market" style="width:${implPct}%"></div></div>
+            </div>
+            <div class="dc-summary-metric">
+                <div class="dc-sm-label">Model Forecast</div>
+                <div class="dc-sm-value">${modPct}%</div>
+                <div class="dc-sm-bar"><div class="dc-sm-fill dc-sm-model" style="width:${modPct}%"></div></div>
+            </div>
+            <div class="dc-summary-metric">
+                <div class="dc-sm-label">Edge</div>
+                <div class="dc-sm-value ${edgeVal > 0 ? 'pnl-positive' : edgeVal < 0 ? 'pnl-negative' : ''}">${edgeVal >= 0 ? '+' : ''}${edgeVal.toFixed(2)}%</div>
+                <div class="dc-sm-bar"><div class="dc-sm-fill dc-sm-edge" style="width:${Math.min(Math.abs(edgeVal) * 5, 100)}%"></div></div>
+            </div>
+            <div class="dc-summary-metric">
+                <div class="dc-sm-label">Evidence Quality</div>
+                <div class="dc-sm-value">${(eq).toFixed(2)}</div>
+                <div class="dc-sm-bar"><div class="dc-sm-fill dc-sm-eq" style="width:${eq * 100}%"></div></div>
+            </div>
+            <div class="dc-summary-metric">
+                <div class="dc-sm-label">Confidence</div>
+                <div class="dc-sm-value">${conf}</div>
+                <div class="dc-sm-bar"><div class="dc-sm-fill dc-sm-conf" style="width:${confPercent}%"></div></div>
+            </div>
+            <div class="dc-summary-metric">
+                <div class="dc-sm-label">Researchability</div>
+                <div class="dc-sm-value">${researchability}%</div>
+                <div class="dc-sm-bar"><div class="dc-sm-fill dc-sm-research" style="width:${researchability}%"></div></div>
+            </div>
+        </div>
+
+        <div class="dc-summary-bottom">
+            <div class="dc-summary-reasons">
+                <div class="dc-reasons-title">📋 Decision Breakdown</div>
+                <ul class="dc-reasons-list">${reasonsList || '<li>No specific reasons recorded</li>'}</ul>
+            </div>
+            <div class="dc-summary-completeness">
+                <div class="dc-completeness-title">Pipeline Progress</div>
+                <div class="dc-completeness-ring">
+                    <svg viewBox="0 0 36 36" class="dc-circular-chart">
+                        <path class="dc-circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                        <path class="dc-circle-fill ${gradeColorClass}" stroke-dasharray="${completeness}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                        <text x="18" y="19.5" class="dc-circle-text">${completeness}%</text>
+                    </svg>
+                </div>
+                <div class="dc-completeness-label">${stages.filter(s => s.status === 'passed' || s.status === 'executed').length}/${stages.length} stages</div>
+            </div>
+        </div>
+    </div>`;
+
+    // ═══ PIPELINE SECTION HEADER ═══
+    html += '<div class="dc-pipeline-section">';
+    html += '<div class="dc-pipeline-title">⚡ Pipeline Stage Breakdown</div>';
+    html += '<div class="dc-pipeline">';
 
     stages.forEach((stage, si) => {
         const sc = stage.status === 'passed' || stage.status === 'executed' ? 'stage-pass' :
@@ -939,6 +1092,7 @@ function renderDecisionDetail(entry, idx) {
         html += `<div class="dc-stage-header">
             <span class="dc-stage-icon">${stage.icon}</span>
             <span class="dc-stage-name">${stage.name}</span>
+            <span class="dc-stage-number">${si + 1}/${stages.length}</span>
             <span class="dc-stage-status-pill ${sc}">${stage.status.toUpperCase()}</span>
         </div>`;
         html += '<div class="dc-stage-body">';
@@ -1222,11 +1376,12 @@ function renderDecisionDetail(entry, idx) {
 
         // Connector arrow between stages
         if (si < stages.length - 1) {
-            html += '<div class="dc-stage-connector">→</div>';
+            html += '<div class="dc-stage-connector"><div class="dc-connector-line"></div><div class="dc-connector-arrow">›</div></div>';
         }
     });
 
     html += '</div>'; // close pipeline
+    html += '</div>'; // close pipeline-section
     return html;
 }
 

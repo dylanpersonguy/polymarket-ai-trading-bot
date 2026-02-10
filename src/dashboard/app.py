@@ -797,6 +797,63 @@ def api_decision_log() -> Any:
                     },
                 })
 
+            # ── Compute Decision Intelligence Score & Grade ──
+            edge_abs = abs(cd.get("edge", 0))
+            eq = cd.get("evidence_quality", 0)
+            n_src = cd.get("num_sources", 0)
+            researchability = classification_data.get("researchability", 0)
+            conf_text = (cd.get("confidence", "") or "").lower()
+            conf_num = (
+                0.9 if conf_text == "high" else 0.6 if conf_text == "medium"
+                else 0.3 if conf_text == "low" else 0.0
+            )
+            # Composite score 0-100
+            di_score = round(min(100, (
+                edge_abs * 200 * 0.30          # edge component (30%)
+                + eq * 100 * 0.25              # evidence quality (25%)
+                + min(n_src / 5, 1) * 100 * 0.15  # source coverage (15%)
+                + researchability * 0.15       # researchability (15%)
+                + conf_num * 100 * 0.15        # confidence (15%)
+            )))
+            di_grade = (
+                "A+" if di_score >= 90 else "A" if di_score >= 80
+                else "B+" if di_score >= 72 else "B" if di_score >= 64
+                else "C+" if di_score >= 56 else "C" if di_score >= 48
+                else "D" if di_score >= 35 else "F"
+            )
+
+            # ── Decision Reasons (human-readable) ──
+            decision_reasons_list: list[str] = []
+            if decision == "TRADE":
+                decision_reasons_list.append(
+                    f"Edge of {edge_abs*100:.1f}% exceeds minimum threshold"
+                )
+                if eq > 0.5:
+                    decision_reasons_list.append(
+                        f"Evidence quality ({eq:.2f}) indicates reliable data"
+                    )
+                if conf_text in ("high", "medium"):
+                    decision_reasons_list.append(
+                        f"Model confidence is {conf_text}"
+                    )
+            else:
+                if reasons:
+                    for r in reasons.split(";"):
+                        r = r.strip()
+                        if r:
+                            decision_reasons_list.append(r)
+                if edge_abs * 100 < 5 and not decision_reasons_list:
+                    decision_reasons_list.append("Insufficient edge to justify trade")
+                if not decision_reasons_list:
+                    decision_reasons_list.append("Did not pass risk checks")
+
+            # ── Pipeline completeness ──
+            stages_passed = sum(
+                1 for s in stages
+                if s["status"] in ("passed", "executed")
+            )
+            pipeline_completeness = round(stages_passed / max(len(stages), 1) * 100)
+
             entries.append({
                 "cycle_id": cd.get("cycle_id"),
                 "market_id": market_id,
@@ -820,6 +877,17 @@ def api_decision_log() -> Any:
                 "quality_breakdown": research_evidence.get(
                     "independent_quality", {}
                 ),
+                # ── Enhanced Intelligence Fields ──
+                "di_score": di_score,
+                "di_grade": di_grade,
+                "decision_reasons_list": decision_reasons_list,
+                "pipeline_completeness": pipeline_completeness,
+                "category": classification_data.get("category", ""),
+                "subcategory": classification_data.get("subcategory", ""),
+                "researchability": researchability,
+                "tags": classification_data.get("tags", []),
+                "search_strategy": classification_data.get("search_strategy", ""),
+                "worth_researching": classification_data.get("worth_researching", True),
             })
 
         # Gather unique cycle IDs for the cycle selector
