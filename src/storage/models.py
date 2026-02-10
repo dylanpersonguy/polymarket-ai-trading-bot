@@ -43,6 +43,7 @@ class ForecastRecord(BaseModel):
     reasoning: str = ""
     evidence_json: str = "[]"
     invalidation_triggers_json: str = "[]"
+    research_evidence_json: str = "{}"
     created_at: str = Field(
         default_factory=lambda: dt.datetime.now(dt.timezone.utc).isoformat()
     )

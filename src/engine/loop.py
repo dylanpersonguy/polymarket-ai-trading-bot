@@ -446,6 +446,7 @@ class TradingEngine:
                 reasoning=forecast.reasoning[:500],
                 evidence_json=json.dumps(forecast.evidence[:5]),
                 invalidation_triggers_json=json.dumps(forecast.invalidation_triggers),
+                research_evidence_json=json.dumps(evidence.to_dict()),
             ))
 
         # ── Decision Gate ────────────────────────────────────────────

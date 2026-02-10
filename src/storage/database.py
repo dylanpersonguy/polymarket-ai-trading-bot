@@ -87,8 +87,9 @@ class Database:
                  implied_probability, model_probability, edge,
                  confidence_level, evidence_quality, num_sources,
                  decision, reasoning, evidence_json,
-                 invalidation_triggers_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 invalidation_triggers_json, research_evidence_json,
+                 created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 fid, forecast.market_id, forecast.question,
@@ -97,7 +98,8 @@ class Database:
                 forecast.confidence_level, forecast.evidence_quality,
                 forecast.num_sources, forecast.decision,
                 forecast.reasoning, forecast.evidence_json,
-                forecast.invalidation_triggers_json, forecast.created_at,
+                forecast.invalidation_triggers_json,
+                forecast.research_evidence_json, forecast.created_at,
             ),
         )
         self.conn.commit()

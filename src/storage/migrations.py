@@ -8,7 +8,7 @@ from src.observability.logger import get_logger
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -261,6 +261,12 @@ _MIGRATIONS: dict[int, list[str]] = {
         """,
         """
         CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts_log(created_at);
+        """,
+    ],
+    4: [
+        # Rich research evidence with real source URLs, titles, quality breakdown
+        """
+        ALTER TABLE forecasts ADD COLUMN research_evidence_json TEXT DEFAULT '{}';
         """,
     ],
 }

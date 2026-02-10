@@ -74,17 +74,70 @@ def _seed_data(db_path: str) -> None:
     ]
     triggers = ["Fed rate decision reversal", "Major exchange hack"]
 
+    # Rich research evidence package (original sources with real URLs)
+    research_evidence = {
+        "market_id": market_id,
+        "question": "Will BTC exceed 100k?",
+        "market_type": "CRYPTO",
+        "evidence": [
+            {
+                "text": "Bitcoin has been trending upward for 3 months with strong momentum",
+                "citation": {"url": "https://coindesk.com/btc-analysis", "publisher": "CoinDesk", "date": "2025-01-15", "title": "BTC Momentum Analysis"},
+                "relevance": 0.85,
+                "is_numeric": False,
+                "metric_name": "",
+                "metric_value": "",
+                "metric_unit": "",
+                "metric_date": "",
+                "confidence": 0.8,
+            },
+            {
+                "text": "Institutional inflows reached $2.1B this week, highest since Q4 2024",
+                "citation": {"url": "https://bloomberg.com/crypto-flows", "publisher": "Bloomberg", "date": "2025-01-14", "title": "Record Crypto Institutional Flows"},
+                "relevance": 0.92,
+                "is_numeric": True,
+                "metric_name": "weekly_inflows",
+                "metric_value": "2.1",
+                "metric_unit": "billion USD",
+                "metric_date": "2025-01-14",
+                "confidence": 0.9,
+            },
+        ],
+        "contradictions": [
+            {
+                "claim_a": "BTC will reach 150k by March",
+                "source_a_url": "https://example.com/bull",
+                "claim_b": "BTC faces resistance at 100k",
+                "source_b_url": "https://example.com/bear",
+                "description": "Analysts disagree on short-term price targets",
+            }
+        ],
+        "quality_score": 0.78,
+        "llm_quality_score": 0.8,
+        "independent_quality": {
+            "overall": 0.75,
+            "recency": 0.9,
+            "authority": 0.8,
+            "agreement": 0.6,
+            "numeric_density": 0.7,
+            "content_depth": 0.65,
+        },
+        "num_sources": 2,
+        "summary": "Strong institutional momentum with $2.1B inflows supports upward trend, though analysts disagree on short-term targets.",
+    }
+
     conn.execute(
         """INSERT INTO forecasts
            (id, market_id, question, market_type, implied_probability,
             model_probability, edge, confidence_level, evidence_quality,
             num_sources, decision, reasoning, evidence_json,
-            invalidation_triggers_json, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            invalidation_triggers_json, research_evidence_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (str(uuid.uuid4()), market_id, "Will BTC exceed 100k?", "CRYPTO",
          0.45, 0.62, 0.17, "HIGH", 0.78, 2, "TRADE",
          "The model estimates 62% probability based on strong institutional inflows and bullish technicals. The market at 45% underestimates momentum.",
-         json.dumps(evidence), json.dumps(triggers), now),
+         json.dumps(evidence), json.dumps(triggers),
+         json.dumps(research_evidence), now),
     )
 
     # Insert a candidate (TRADE)
@@ -215,7 +268,7 @@ def test_decision_log_limit(client):
 
 
 def test_decision_log_evidence_structure(client):
-    """Evidence bullets preserve citation structure."""
+    """Evidence bullets preserve citation structure with real source URLs."""
     c, db_path = client
     _seed_data(db_path)
 
@@ -223,5 +276,79 @@ def test_decision_log_evidence_structure(client):
     data = resp.get_json()
     trade_entry = next(e for e in data["entries"] if e["decision"] == "TRADE")
     bullets = trade_entry["evidence_bullets"]
+
+    # Should use research evidence (real citations) over LLM evidence
     assert bullets[0]["citation"]["publisher"] == "CoinDesk"
+    assert bullets[0]["citation"]["url"] == "https://coindesk.com/btc-analysis"
+    assert bullets[0]["citation"]["title"] == "BTC Momentum Analysis"
     assert bullets[1]["relevance"] == 0.92
+    assert bullets[1]["is_numeric"] is True
+    assert bullets[1]["metric_name"] == "weekly_inflows"
+    assert bullets[1]["metric_value"] == "2.1"
+
+    # Research summary
+    assert "institutional momentum" in trade_entry["research_summary"].lower()
+
+    # Contradictions
+    assert len(trade_entry["contradictions"]) == 1
+    assert "disagree" in trade_entry["contradictions"][0]["description"].lower()
+
+    # Quality breakdown
+    qb = trade_entry["quality_breakdown"]
+    assert qb["overall"] == 0.75
+    assert qb["recency"] == 0.9
+    assert qb["authority"] == 0.8
+
+
+def test_decision_log_fallback_evidence(client):
+    """Falls back to LLM evidence when research_evidence_json is empty."""
+    c, db_path = client
+    conn = sqlite3.connect(db_path)
+    now = datetime.utcnow().isoformat()
+    market_id = "0x_fallback_market"
+
+    conn.execute(
+        """INSERT OR REPLACE INTO markets
+           (id, condition_id, question, market_type, category, volume,
+            liquidity, end_date, resolution_source, first_seen, last_updated)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (market_id, "cond_fb", "Fallback test?", "TEST", "test",
+         1000.0, 500.0, "2025-06-01", "", now, now),
+    )
+
+    # Insert forecast with only evidence_json (no research_evidence_json)
+    llm_evidence = [{"text": "LLM generated fact", "source": "SomeSource", "url": "", "date": "", "impact": "supports"}]
+    conn.execute(
+        """INSERT INTO forecasts
+           (id, market_id, question, market_type, implied_probability,
+            model_probability, edge, confidence_level, evidence_quality,
+            num_sources, decision, reasoning, evidence_json,
+            invalidation_triggers_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (str(uuid.uuid4()), market_id, "Fallback test?", "TEST",
+         0.5, 0.55, 0.05, "LOW", 0.3, 1, "NO TRADE",
+         "Low confidence", json.dumps(llm_evidence), "[]", now),
+    )
+
+    conn.execute(
+        """INSERT INTO candidates
+           (cycle_id, market_id, question, market_type, implied_prob,
+            model_prob, edge, evidence_quality, num_sources, confidence,
+            decision, decision_reasons, stake_usd, order_status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (5, market_id, "Fallback test?", "TEST",
+         0.5, 0.55, 0.05, 0.3, 1, "LOW",
+         "NO TRADE", "Edge too small", 0.0, "", now),
+    )
+    conn.commit()
+    conn.close()
+
+    resp = c.get("/api/decision-log")
+    data = resp.get_json()
+    fb_entry = next(e for e in data["entries"] if e["market_id"] == market_id)
+    # Should fall back to LLM evidence
+    assert len(fb_entry["evidence_bullets"]) == 1
+    assert fb_entry["evidence_bullets"][0]["text"] == "LLM generated fact"
+    # No research summary or contradictions
+    assert fb_entry["research_summary"] == ""
+    assert fb_entry["contradictions"] == []

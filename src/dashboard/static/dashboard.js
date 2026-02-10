@@ -912,22 +912,133 @@ function renderDecisionDetail(entry, idx) {
             html += '<div class="dc-kv-grid">';
             html += kvPill('Sources', d.num_sources || 0);
             html += kvPill('Quality', fmt(d.evidence_quality, 3));
+            if (d.llm_quality_score != null && d.llm_quality_score > 0) {
+                html += kvPill('LLM Quality', fmt(d.llm_quality_score, 2));
+            }
             html += '</div>';
+
+            // Quality breakdown bars
+            if (d.quality_breakdown && Object.keys(d.quality_breakdown).length > 0) {
+                const qb = d.quality_breakdown;
+                html += '<div class="dc-quality-breakdown">';
+                html += '<div class="dc-evidence-title">📊 Quality Breakdown</div>';
+                const dims = [
+                    {label: 'Recency', key: 'recency', color: '#00d68f'},
+                    {label: 'Authority', key: 'authority', color: '#3b82f6'},
+                    {label: 'Agreement', key: 'agreement', color: '#a78bfa'},
+                    {label: 'Numeric Data', key: 'numeric_density', color: '#f59e0b'},
+                    {label: 'Content Depth', key: 'content_depth', color: '#06b6d4'},
+                ];
+                dims.forEach(dim => {
+                    const val = qb[dim.key] || 0;
+                    const pct = (val * 100).toFixed(0);
+                    html += `<div class="dc-quality-row">
+                        <span class="dc-quality-label">${dim.label}</span>
+                        <div class="dc-quality-track"><div class="dc-quality-fill" style="width:${pct}%;background:${dim.color}"></div></div>
+                        <span class="dc-quality-val">${pct}%</span>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+
+            // Research summary
+            if (d.summary) {
+                html += `<div class="dc-research-summary">
+                    <div class="dc-evidence-title">📋 Research Summary</div>
+                    <div class="dc-summary-text">${escHtml(d.summary)}</div>
+                </div>`;
+            }
+
+            // Evidence bullets with clickable source links
             if (d.evidence_bullets && d.evidence_bullets.length > 0) {
                 html += '<div class="dc-evidence-list">';
-                html += '<div class="dc-evidence-title">📝 Key Evidence</div>';
+                html += '<div class="dc-evidence-title">� Key Evidence from Sources</div>';
                 d.evidence_bullets.forEach(b => {
                     const text = typeof b === 'string' ? b : (b.text || JSON.stringify(b));
                     const citation = (typeof b === 'object' && b.citation) ? b.citation : null;
-                    const citStr = citation
-                        ? `<span class="dc-citation">${citation.publisher || citation.url || ''}${citation.date ? ' · ' + citation.date : ''}</span>`
-                        : '';
+                    const confidence = (typeof b === 'object' && b.confidence != null) ? b.confidence : null;
+                    const isNumeric = (typeof b === 'object' && b.is_numeric) ? true : false;
+
+                    // Impact/confidence badge
+                    let impactBadge = '';
+                    if (typeof b === 'object' && b.impact) {
+                        const impClass = b.impact === 'supports' ? 'dc-impact-supports' :
+                                        b.impact === 'opposes' ? 'dc-impact-opposes' : 'dc-impact-neutral';
+                        const impIcon = b.impact === 'supports' ? '▲' : b.impact === 'opposes' ? '▼' : '●';
+                        impactBadge = `<span class="dc-impact-badge ${impClass}">${impIcon} ${b.impact}</span>`;
+                    }
+
+                    // Numeric data badge
+                    let numericBadge = '';
+                    if (isNumeric && b.metric_name) {
+                        const metricVal = b.metric_value || '';
+                        const metricUnit = b.metric_unit || '';
+                        numericBadge = `<span class="dc-numeric-badge">📊 ${escHtml(b.metric_name)}: ${escHtml(metricVal)}${metricUnit ? ' ' + escHtml(metricUnit) : ''}</span>`;
+                    }
+
+                    // Relevance indicator
                     const rel = (typeof b === 'object' && b.relevance != null)
-                        ? `<span class="dc-relevance">${(b.relevance * 100).toFixed(0)}%</span>`
+                        ? `<span class="dc-relevance">${(b.relevance * 100).toFixed(0)}% relevant</span>`
                         : '';
-                    html += `<div class="dc-evidence-item">
-                        <div class="dc-evidence-text">${escHtml(text.substring(0, 300))}</div>
-                        <div class="dc-evidence-meta">${rel}${citStr}</div>
+
+                    // Confidence indicator
+                    const confBadge = confidence != null
+                        ? `<span class="dc-confidence-badge">${(confidence * 100).toFixed(0)}% conf.</span>`
+                        : '';
+
+                    // Source link with title
+                    let sourceLink = '';
+                    if (citation) {
+                        const publisher = citation.publisher || '';
+                        const title = citation.title || '';
+                        const url = citation.url || '';
+                        const date = citation.date || '';
+
+                        if (url) {
+                            const linkText = title || publisher || url;
+                            sourceLink = `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="dc-source-link" title="${escHtml(url)}">🔗 ${escHtml(linkText.substring(0, 80))}</a>`;
+                        }
+                        if (publisher) {
+                            sourceLink += `<span class="dc-publisher">${escHtml(publisher)}</span>`;
+                        }
+                        if (date) {
+                            sourceLink += `<span class="dc-source-date">${escHtml(date)}</span>`;
+                        }
+                    } else if (typeof b === 'object' && b.source) {
+                        // Fallback for LLM evidence format {text, source, url, date, impact}
+                        const url = b.url || '';
+                        if (url) {
+                            sourceLink = `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="dc-source-link">🔗 ${escHtml(b.source || url)}</a>`;
+                        } else if (b.source) {
+                            sourceLink = `<span class="dc-publisher">${escHtml(b.source)}</span>`;
+                        }
+                        if (b.date) sourceLink += `<span class="dc-source-date">${escHtml(b.date)}</span>`;
+                    }
+
+                    html += `<div class="dc-evidence-item${isNumeric ? ' dc-evidence-numeric' : ''}">
+                        <div class="dc-evidence-header">
+                            ${impactBadge}${rel}${confBadge}${numericBadge}
+                        </div>
+                        <div class="dc-evidence-text">${escHtml(text)}</div>
+                        <div class="dc-evidence-meta">${sourceLink}</div>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+
+            // Contradictions
+            if (d.contradictions && d.contradictions.length > 0) {
+                html += '<div class="dc-contradictions">';
+                html += '<div class="dc-evidence-title">⚖️ Contradictions Found</div>';
+                d.contradictions.forEach(c => {
+                    html += `<div class="dc-contradiction-item">
+                        <div class="dc-contradiction-claim">
+                            <span class="dc-contra-label">Claim A:</span> ${escHtml(c.claim_a || '')}
+                        </div>
+                        <div class="dc-contradiction-claim">
+                            <span class="dc-contra-label">Claim B:</span> ${escHtml(c.claim_b || '')}
+                        </div>
+                        ${c.description ? `<div class="dc-contradiction-desc">${escHtml(c.description)}</div>` : ''}
                     </div>`;
                 });
                 html += '</div>';

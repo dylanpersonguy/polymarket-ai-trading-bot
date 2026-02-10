@@ -68,7 +68,8 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
             market_type TEXT, implied_probability REAL, model_probability REAL,
             edge REAL, confidence_level TEXT, evidence_quality REAL,
             num_sources INTEGER, decision TEXT, reasoning TEXT,
-            evidence_json TEXT, invalidation_triggers_json TEXT, created_at TEXT
+            evidence_json TEXT, invalidation_triggers_json TEXT,
+            research_evidence_json TEXT DEFAULT '{}', created_at TEXT
         );
         CREATE TABLE IF NOT EXISTS trades (
             id TEXT PRIMARY KEY, order_id TEXT, market_id TEXT NOT NULL,
@@ -595,17 +596,34 @@ def api_decision_log() -> Any:
             evidence_bullets: list[dict] = []
             reasoning = ""
             invalidation_triggers: list[str] = []
+            research_evidence: dict[str, Any] = {}
             if f_row:
                 fd = dict(f_row)
                 reasoning = fd.get("reasoning", "") or ""
+
+                # Parse rich research evidence (original sources with real URLs)
                 try:
-                    evidence_bullets = json.loads(
-                        fd.get("evidence_json", "[]") or "[]"
-                    )
-                    if not isinstance(evidence_bullets, list):
-                        evidence_bullets = []
+                    raw_research = fd.get("research_evidence_json", "{}") or "{}"
+                    research_evidence = json.loads(raw_research)
+                    if not isinstance(research_evidence, dict):
+                        research_evidence = {}
                 except (json.JSONDecodeError, TypeError):
-                    evidence_bullets = []
+                    research_evidence = {}
+
+                # Use research evidence bullets if available (real citations),
+                # fall back to LLM evidence
+                if research_evidence.get("evidence"):
+                    evidence_bullets = research_evidence["evidence"]
+                else:
+                    try:
+                        evidence_bullets = json.loads(
+                            fd.get("evidence_json", "[]") or "[]"
+                        )
+                        if not isinstance(evidence_bullets, list):
+                            evidence_bullets = []
+                    except (json.JSONDecodeError, TypeError):
+                        evidence_bullets = []
+
                 try:
                     invalidation_triggers = json.loads(
                         fd.get("invalidation_triggers_json", "[]") or "[]"
@@ -643,15 +661,28 @@ def api_decision_log() -> Any:
 
             # Stage 2: Research
             research_status = "passed" if cd.get("num_sources", 0) > 0 else "skipped"
+            research_details: dict[str, Any] = {
+                "num_sources": cd.get("num_sources", 0),
+                "evidence_quality": cd.get("evidence_quality", 0),
+                "evidence_bullets": evidence_bullets[:5],
+            }
+            # Add rich research package data when available
+            if research_evidence:
+                research_details["summary"] = research_evidence.get("summary", "")
+                research_details["contradictions"] = research_evidence.get(
+                    "contradictions", []
+                )
+                research_details["quality_breakdown"] = research_evidence.get(
+                    "independent_quality", {}
+                )
+                research_details["llm_quality_score"] = research_evidence.get(
+                    "llm_quality_score", 0
+                )
             stages.append({
                 "name": "Research",
                 "icon": "📚",
                 "status": research_status,
-                "details": {
-                    "num_sources": cd.get("num_sources", 0),
-                    "evidence_quality": cd.get("evidence_quality", 0),
-                    "evidence_bullets": evidence_bullets[:5],
-                },
+                "details": research_details,
             })
 
             # Stage 3: Forecast
@@ -719,6 +750,11 @@ def api_decision_log() -> Any:
                 "reasoning": reasoning,
                 "evidence_bullets": evidence_bullets[:5],
                 "invalidation_triggers": invalidation_triggers,
+                "research_summary": research_evidence.get("summary", ""),
+                "contradictions": research_evidence.get("contradictions", []),
+                "quality_breakdown": research_evidence.get(
+                    "independent_quality", {}
+                ),
             })
 
         # Gather unique cycle IDs for the cycle selector
