@@ -8,7 +8,7 @@ from src.observability.logger import get_logger
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 _MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -267,6 +267,111 @@ _MIGRATIONS: dict[int, list[str]] = {
         # Rich research evidence with real source URLs, titles, quality breakdown
         """
         ALTER TABLE forecasts ADD COLUMN research_evidence_json TEXT DEFAULT '{}';
+        """,
+    ],
+    5: [
+        # ── Performance Analytics Tables ──
+
+        # Trade performance log (populated when markets resolve)
+        """
+        CREATE TABLE IF NOT EXISTS performance_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            market_id TEXT NOT NULL,
+            question TEXT,
+            category TEXT DEFAULT 'UNKNOWN',
+            forecast_prob REAL,
+            actual_outcome REAL,
+            edge_at_entry REAL,
+            confidence TEXT DEFAULT 'LOW',
+            evidence_quality REAL DEFAULT 0,
+            stake_usd REAL DEFAULT 0,
+            entry_price REAL DEFAULT 0,
+            exit_price REAL DEFAULT 0,
+            pnl REAL DEFAULT 0,
+            holding_hours REAL DEFAULT 0,
+            resolved_at TEXT
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_perf_resolved ON performance_log(resolved_at);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_perf_category ON performance_log(category);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_perf_market ON performance_log(market_id);
+        """,
+
+        # Per-model forecast accuracy log (for adaptive weighting)
+        """
+        CREATE TABLE IF NOT EXISTS model_forecast_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            model_name TEXT NOT NULL,
+            market_id TEXT NOT NULL,
+            category TEXT DEFAULT 'UNKNOWN',
+            forecast_prob REAL,
+            actual_outcome REAL,
+            recorded_at TEXT
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_model_log_model ON model_forecast_log(model_name);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_model_log_category ON model_forecast_log(category);
+        """,
+
+        # Market regime history
+        """
+        CREATE TABLE IF NOT EXISTS regime_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            regime TEXT NOT NULL,
+            confidence REAL DEFAULT 0,
+            kelly_multiplier REAL DEFAULT 1.0,
+            size_multiplier REAL DEFAULT 1.0,
+            explanation TEXT,
+            detected_at TEXT
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_regime_detected ON regime_history(detected_at);
+        """,
+
+        # Smart entry plans log
+        """
+        CREATE TABLE IF NOT EXISTS smart_entry_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            market_id TEXT NOT NULL,
+            side TEXT,
+            current_price REAL,
+            recommended_price REAL,
+            strategy TEXT,
+            improvement_bps REAL DEFAULT 0,
+            vwap_signal TEXT,
+            depth_signal TEXT,
+            momentum_signal TEXT,
+            created_at TEXT
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_smart_entry_market ON smart_entry_log(market_id);
+        """,
+
+        # Scanner pipeline state (for live scanner view)
+        """
+        CREATE TABLE IF NOT EXISTS scanner_pipeline (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cycle_id INTEGER,
+            market_id TEXT NOT NULL,
+            question TEXT,
+            stage TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            details_json TEXT DEFAULT '{}',
+            updated_at TEXT
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_scanner_cycle ON scanner_pipeline(cycle_id);
         """,
     ],
 }

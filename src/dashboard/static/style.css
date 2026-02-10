@@ -1572,3 +1572,50 @@ footer {
     .dc-mini-prob { display: none; }
     .dc-category-badge { display: none; }
 }
+
+/* ─── Performance Analytics ────────────────────────────────────── */
+#analytics-panel .analytics-cards {
+    margin-bottom: 16px;
+}
+
+#analytics-panel .charts-row {
+    margin-top: 8px;
+}
+
+#leaderboard-table th:first-child { width: 50px; text-align: center; }
+#leaderboard-table td:first-child { text-align: center; font-weight: 700; }
+
+.leaderboard-rank {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+.leaderboard-rank.rank-1 { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #1a1d27; }
+.leaderboard-rank.rank-2 { background: linear-gradient(135deg, #94a3b8, #64748b); color: #1a1d27; }
+.leaderboard-rank.rank-3 { background: linear-gradient(135deg, #cd7f32, #a0522d); color: #fff; }
+.leaderboard-rank.rank-other { background: var(--bg-table-row); color: var(--text-dim); }
+
+/* ─── Market Regime ────────────────────────────────────────────── */
+#regime-panel .card-grid {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.regime-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.regime-NORMAL { background: rgba(76, 141, 255, 0.2); color: var(--accent-blue); }
+.regime-TRENDING { background: rgba(0, 214, 143, 0.2); color: var(--accent-green); }
+.regime-MEAN_REVERTING { background: rgba(168, 85, 247, 0.2); color: var(--accent-purple); }
+.regime-HIGH_VOLATILITY { background: rgba(255, 77, 106, 0.2); color: var(--accent-red); }
+.regime-LOW_ACTIVITY { background: rgba(139, 143, 163, 0.2); color: var(--text-dim); }

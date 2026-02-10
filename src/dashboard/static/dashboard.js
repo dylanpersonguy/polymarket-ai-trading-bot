@@ -1437,6 +1437,225 @@ function filterDecisionCards() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  PERFORMANCE ANALYTICS
+// ═══════════════════════════════════════════════════════════════
+
+let chartCategoryPnl = null;
+let chartCalibration = null;
+let chartModelAccuracy = null;
+
+async function updateAnalytics() {
+    try {
+        const [analytics, calibration, modelAcc] = await Promise.all([
+            fetch('/api/analytics').then(r => r.json()).catch(() => null),
+            fetch('/api/calibration-curve').then(r => r.json()).catch(() => null),
+            fetch('/api/model-accuracy').then(r => r.json()).catch(() => null),
+        ]);
+
+        if (analytics) {
+            // KPI Cards
+            const wr = analytics.win_rate || 0;
+            $('#ana-win-rate').textContent = `${(wr * 100).toFixed(1)}%`;
+            $('#ana-win-rate-sub').textContent = `7d: ${(analytics.win_rate_7d * 100 || 0).toFixed(1)}% | 30d: ${(analytics.win_rate_30d * 100 || 0).toFixed(1)}%`;
+
+            const sharpe = analytics.sharpe_ratio || 0;
+            $('#ana-sharpe').textContent = sharpe.toFixed(2);
+            $('#ana-sortino-sub').textContent = `Sortino: ${(analytics.sortino_ratio || 0).toFixed(2)}`;
+
+            const pf = analytics.profit_factor || 0;
+            $('#ana-profit-factor').textContent = pf === Infinity ? '∞' : pf.toFixed(2);
+            const avgWin = (analytics.avg_win || 0).toFixed(2);
+            const avgLoss = Math.abs(analytics.avg_loss || 0).toFixed(2);
+            $('#ana-pf-sub').textContent = `Avg W: $${avgWin} / L: $${avgLoss}`;
+
+            const maxDD = (analytics.max_drawdown_pct || 0) * 100;
+            $('#ana-max-dd').textContent = `${maxDD.toFixed(2)}%`;
+            $('#ana-calmar-sub').textContent = `Calmar: ${(analytics.calmar_ratio || 0).toFixed(2)}`;
+
+            const roi = analytics.roi_pct || 0;
+            $('#ana-roi').textContent = `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`;
+            $('#ana-roi').style.color = roi >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+            $('#ana-roi-sub').textContent = `Staked: $${(analytics.total_staked || 0).toFixed(2)}`;
+
+            const streak = analytics.current_streak || 0;
+            const streakEmoji = streak > 0 ? '🔥' : streak < 0 ? '❄️' : '—';
+            $('#ana-streak').textContent = `${streakEmoji} ${Math.abs(streak)}`;
+            $('#ana-streak-sub').textContent = `Best: ${analytics.best_streak || 0} | Worst: ${analytics.worst_streak || 0}`;
+
+            // Leaderboard
+            const lb = analytics.leaderboard || [];
+            const lbBody = $('#leaderboard-body');
+            if (lb.length > 0) {
+                lbBody.innerHTML = lb.map(entry => {
+                    const rankClass = entry.rank <= 3 ? `rank-${entry.rank}` : 'rank-other';
+                    const roiColor = entry.roi_pct >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+                    return `<tr>
+                        <td><span class="leaderboard-rank ${rankClass}">${entry.rank}</span></td>
+                        <td>${entry.category}</td>
+                        <td style="color:${roiColor};font-weight:700;">${entry.roi_pct >= 0 ? '+' : ''}${entry.roi_pct.toFixed(1)}%</td>
+                        <td>${(entry.win_rate * 100).toFixed(1)}%</td>
+                        <td style="color:${entry.total_pnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">$${entry.total_pnl.toFixed(2)}</td>
+                        <td>${entry.trades}</td>
+                        <td>${(entry.avg_edge * 100).toFixed(2)}%</td>
+                        <td>${entry.score.toFixed(1)}</td>
+                    </tr>`;
+                }).join('');
+            }
+
+            // Category PnL Chart
+            const cats = analytics.category_stats || [];
+            if (cats.length > 0) {
+                const labels = cats.map(c => c.category);
+                const pnlData = cats.map(c => c.total_pnl);
+                const bgColors = pnlData.map(v => v >= 0
+                    ? 'rgba(0, 214, 143, 0.7)'
+                    : 'rgba(255, 77, 106, 0.7)');
+
+                const ctx = document.getElementById('chart-category-pnl');
+                if (chartCategoryPnl) chartCategoryPnl.destroy();
+                chartCategoryPnl = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'P&L ($)',
+                            data: pnlData,
+                            backgroundColor: bgColors,
+                            borderRadius: 4,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { color: '#8b8fa3', maxRotation: 45 }, grid: { display: false } },
+                            y: { ticks: { color: '#8b8fa3' }, grid: { color: 'rgba(42,45,58,0.5)' } },
+                        },
+                    },
+                });
+            }
+        }
+
+        // Calibration Chart
+        if (calibration && calibration.bins && calibration.bins.length > 0) {
+            const bins = calibration.bins;
+            const labels = bins.map(b => b.range);
+            const forecasted = bins.map(b => b.avg_forecast);
+            const actual = bins.map(b => b.avg_outcome);
+
+            const ctx = document.getElementById('chart-calibration');
+            if (chartCalibration) chartCalibration.destroy();
+            chartCalibration = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Forecast Avg',
+                            data: forecasted,
+                            backgroundColor: 'rgba(76, 141, 255, 0.6)',
+                            borderRadius: 3,
+                        },
+                        {
+                            label: 'Actual Outcome',
+                            data: actual,
+                            backgroundColor: 'rgba(0, 214, 143, 0.6)',
+                            borderRadius: 3,
+                        },
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { labels: { color: '#8b8fa3' } },
+                    },
+                    scales: {
+                        x: { ticks: { color: '#8b8fa3' }, grid: { display: false } },
+                        y: { ticks: { color: '#8b8fa3' }, grid: { color: 'rgba(42,45,58,0.5)' }, min: 0, max: 1 },
+                    },
+                },
+            });
+        }
+
+        // Model Accuracy Chart
+        if (modelAcc && modelAcc.models && modelAcc.models.length > 0) {
+            const models = modelAcc.models;
+            const labels = models.map(m => m.model_name.split('/').pop().split('-').slice(0, 2).join('-'));
+            const brierData = models.map(m => m.brier_score);
+
+            const ctx = document.getElementById('chart-model-accuracy');
+            if (chartModelAccuracy) chartModelAccuracy.destroy();
+            chartModelAccuracy = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels,
+                    datasets: [{
+                        data: models.map(m => m.total_forecasts),
+                        backgroundColor: [
+                            'rgba(76, 141, 255, 0.7)',
+                            'rgba(168, 85, 247, 0.7)',
+                            'rgba(255, 159, 67, 0.7)',
+                            'rgba(0, 214, 143, 0.7)',
+                            'rgba(244, 114, 182, 0.7)',
+                        ],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { labels: { color: '#8b8fa3', font: { size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: (ctx) => {
+                                    const m = models[ctx.dataIndex];
+                                    return `Brier: ${m.brier_score.toFixed(4)} | Err: ${m.avg_error.toFixed(4)}`;
+                                }
+                            }
+                        }
+                    },
+                },
+            });
+        }
+    } catch (e) {
+        console.warn('Analytics update error:', e);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MARKET REGIME
+// ═══════════════════════════════════════════════════════════════
+
+async function updateRegime() {
+    try {
+        const data = await fetch('/api/regime').then(r => r.json()).catch(() => null);
+        if (!data || !data.current) return;
+
+        const c = data.current;
+        const regimeEl = $('#regime-current');
+        regimeEl.textContent = c.regime || 'NORMAL';
+        regimeEl.className = 'card-value';
+
+        const conf = c.confidence || 0;
+        $('#regime-confidence').textContent = `Confidence: ${(conf * 100).toFixed(1)}%`;
+
+        const kelly = c.kelly_multiplier || 1;
+        $('#regime-kelly').textContent = `${kelly.toFixed(2)}x`;
+        $('#regime-kelly').style.color = kelly < 0.8 ? 'var(--accent-red)' : kelly > 1.1 ? 'var(--accent-green)' : 'var(--text)';
+
+        const sizeMult = c.size_multiplier || 1;
+        $('#regime-size-mult').textContent = `Size: ${sizeMult.toFixed(2)}x`;
+
+        $('#regime-explanation').textContent = c.explanation || '—';
+        $('#regime-detected-at').textContent = c.detected_at ? `Detected: ${new Date(c.detected_at).toLocaleString()}` : '—';
+    } catch (e) {
+        console.warn('Regime update error:', e);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  REFRESH ORCHESTRATION
 // ═══════════════════════════════════════════════════════════════
 
@@ -1458,6 +1677,8 @@ async function refreshAll() {
         updateAudit(),
         updateAlerts(),
         updateConfig(),
+        updateAnalytics(),
+        updateRegime(),
     ]);
     $('#last-updated-time').textContent = new Date().toLocaleTimeString();
 

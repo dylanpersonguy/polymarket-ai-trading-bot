@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Polymarket Bot — Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css?v=7">
+    <link rel="stylesheet" href="/static/style.css?v=8">
 </head>
 <body>
     <!-- ─── Toast Container ─────────────────────────────────── -->
@@ -92,6 +92,101 @@
         <div class="chart-container chart-wide">
             <h3>💰 Equity Curve (Cumulative P&L)</h3>
             <canvas id="chart-equity-curve"></canvas>
+        </div>
+    </section>
+
+    <!-- ─── Performance Analytics ───────────────────────────── -->
+    <section class="panel" id="analytics-panel">
+        <div class="panel-header">
+            <h2>📊 Performance Analytics</h2>
+        </div>
+
+        <!-- Analytics KPI Cards -->
+        <div class="card-grid analytics-cards" id="analytics-kpi-cards">
+            <div class="card accent-green">
+                <div class="card-label">Win Rate</div>
+                <div class="card-value" id="ana-win-rate">—</div>
+                <div class="card-sub" id="ana-win-rate-sub">7d: — | 30d: —</div>
+            </div>
+            <div class="card accent-blue">
+                <div class="card-label">Sharpe Ratio</div>
+                <div class="card-value" id="ana-sharpe">—</div>
+                <div class="card-sub" id="ana-sortino-sub">Sortino: —</div>
+            </div>
+            <div class="card accent-purple">
+                <div class="card-label">Profit Factor</div>
+                <div class="card-value" id="ana-profit-factor">—</div>
+                <div class="card-sub" id="ana-pf-sub">Avg Win/Loss: —</div>
+            </div>
+            <div class="card accent-orange">
+                <div class="card-label">Max Drawdown</div>
+                <div class="card-value" id="ana-max-dd">—</div>
+                <div class="card-sub" id="ana-calmar-sub">Calmar: —</div>
+            </div>
+            <div class="card accent-teal">
+                <div class="card-label">ROI</div>
+                <div class="card-value" id="ana-roi">—</div>
+                <div class="card-sub" id="ana-roi-sub">Total Staked: —</div>
+            </div>
+            <div class="card accent-pink">
+                <div class="card-label">Streak</div>
+                <div class="card-value" id="ana-streak">—</div>
+                <div class="card-sub" id="ana-streak-sub">Best: — | Worst: —</div>
+            </div>
+        </div>
+
+        <!-- Analytics Charts Row -->
+        <div class="charts-row">
+            <div class="chart-container">
+                <h3>📊 Category P&L Breakdown</h3>
+                <canvas id="chart-category-pnl"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>🎯 Calibration Accuracy</h3>
+                <canvas id="chart-calibration"></canvas>
+            </div>
+            <div class="chart-container chart-small">
+                <h3>🤖 Model Accuracy</h3>
+                <canvas id="chart-model-accuracy"></canvas>
+            </div>
+        </div>
+
+        <!-- Strategy Leaderboard -->
+        <div class="table-wrap" style="margin-top:16px;">
+            <h3 style="margin:0 0 8px 0;">🏆 Strategy Leaderboard</h3>
+            <table id="leaderboard-table">
+                <thead><tr>
+                    <th>Rank</th><th>Category</th><th>ROI %</th><th>Win Rate</th>
+                    <th>Total P&L</th><th>Trades</th><th>Avg Edge</th><th>Score</th>
+                </tr></thead>
+                <tbody id="leaderboard-body">
+                    <tr><td colspan="8" class="empty-state">No analytics data yet — resolved trades populate this view</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ─── Market Regime ───────────────────────────────────── -->
+    <section class="panel" id="regime-panel">
+        <div class="panel-header">
+            <h2>🌡️ Market Regime</h2>
+        </div>
+        <div class="card-grid" id="regime-cards">
+            <div class="card accent-blue">
+                <div class="card-label">Current Regime</div>
+                <div class="card-value" id="regime-current">NORMAL</div>
+                <div class="card-sub" id="regime-confidence">Confidence: —</div>
+            </div>
+            <div class="card accent-green">
+                <div class="card-label">Kelly Multiplier</div>
+                <div class="card-value" id="regime-kelly">1.00x</div>
+                <div class="card-sub" id="regime-size-mult">Size: 1.00x</div>
+            </div>
+            <div class="card accent-purple">
+                <div class="card-label">Regime Explanation</div>
+                <div class="card-value" id="regime-explanation" style="font-size:0.85rem;line-height:1.4;">—</div>
+                <div class="card-sub" id="regime-detected-at">—</div>
+            </div>
         </div>
     </section>
 
@@ -324,6 +419,6 @@
         <span>Auto-refreshes every 15s</span>
     </footer>
 
-    <script src="/static/dashboard.js?v=7"></script>
+    <script src="/static/dashboard.js?v=8"></script>
 </body>
 </html>

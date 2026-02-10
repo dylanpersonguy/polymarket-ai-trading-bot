@@ -31,6 +31,10 @@ from src.config import BotConfig, load_config, is_live_trading_enabled
 from src.policy.drawdown import DrawdownManager
 from src.policy.portfolio_risk import PortfolioRiskManager, PositionSnapshot
 from src.engine.market_filter import ResearchCache, filter_markets, FilterStats
+from src.analytics.regime_detector import RegimeDetector, RegimeState
+from src.analytics.calibration_feedback import CalibrationFeedbackLoop
+from src.analytics.adaptive_weights import AdaptiveModelWeighter
+from src.analytics.smart_entry import SmartEntryCalculator
 from src.observability.logger import get_logger
 
 log = get_logger(__name__)
@@ -77,6 +81,13 @@ class TradingEngine:
             cooldown_minutes=self.config.scanning.research_cooldown_minutes,
         )
         self._last_filter_stats: FilterStats | None = None
+
+        # ── Analytics & Intelligence Layer ──
+        self._regime_detector = RegimeDetector()
+        self._calibration_loop = CalibrationFeedbackLoop()
+        self._adaptive_weighter = AdaptiveModelWeighter(self.config.ensemble)
+        self._smart_entry = SmartEntryCalculator()
+        self._current_regime: RegimeState | None = None
 
         # Database (initialised in start())
         self._db: Any = None
@@ -197,6 +208,39 @@ class TradingEngine:
                 if self._db:
                     self._db.insert_alert("warning", f"Cycle skipped: {dd_reason}", "risk")
                 self._finish_cycle(cycle)
+                return cycle
+
+            # ── Regime Detection ─────────────────────────────────────
+            try:
+                if self._db:
+                    self._current_regime = self._regime_detector.detect(
+                        self._db.conn,
+                    )
+                    # Persist regime state for dashboard
+                    import datetime as _dt
+                    self._db.conn.execute("""
+                        INSERT INTO regime_history
+                            (regime, confidence, kelly_multiplier,
+                             size_multiplier, explanation, detected_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (
+                        self._current_regime.regime,
+                        self._current_regime.confidence,
+                        self._current_regime.kelly_multiplier,
+                        self._current_regime.size_multiplier,
+                        self._current_regime.explanation,
+                        _dt.datetime.now(_dt.timezone.utc).isoformat(),
+                    ))
+                    self._db.conn.commit()
+            except Exception as e:
+                log.warning("engine.regime_detection_error", error=str(e))
+
+            # ── Calibration check ────────────────────────────────────
+            try:
+                if self._db and self._cycle_count % 10 == 0:
+                    self._calibration_loop.retrain_calibrator(self._db.conn)
+            except Exception as e:
+                log.warning("engine.calibration_retrain_error", error=str(e))
                 return cycle
 
             markets = await self._discover_markets()
@@ -396,6 +440,26 @@ class TradingEngine:
             features=features, evidence=evidence,
             resolution_source=market.resolution_source,
         )
+
+        # ── Adaptive model weights (learn per-category accuracy) ─────
+        adaptive_result = None
+        try:
+            if self._db:
+                cat = classification.category if classification else "UNKNOWN"
+                adaptive_result = self._adaptive_weighter.get_weights(
+                    self._db.conn, cat,
+                )
+                if adaptive_result.data_available:
+                    log.info(
+                        "engine.adaptive_weights",
+                        category=cat,
+                        blend=round(adaptive_result.blend_factor, 3),
+                        weights={k: round(v, 3)
+                                 for k, v in adaptive_result.weights.items()},
+                    )
+        except Exception as e:
+            log.warning("engine.adaptive_weights_error", error=str(e))
+
         log.info(
             "engine.forecast_done", market_id=market_id,
             implied=round(forecast.implied_probability, 3),
@@ -482,12 +546,21 @@ class TradingEngine:
 
         # ── Stage 6: Position Sizing ─────────────────────────────────
         from src.policy.position_sizer import calculate_position_size
+        regime_kelly = (
+            self._current_regime.kelly_multiplier
+            if self._current_regime else 1.0
+        )
+        regime_size = (
+            self._current_regime.size_multiplier
+            if self._current_regime else 1.0
+        )
         position = calculate_position_size(
             edge=edge_result, risk_config=self.config.risk,
             confidence_level=forecast.confidence_level,
             drawdown_multiplier=self.drawdown.state.kelly_multiplier,
             timeline_multiplier=features.time_decay_multiplier,
             price_volatility=features.price_volatility,
+            regime_multiplier=regime_kelly * regime_size,
         )
         if position.stake_usd < 1.0:
             log.info("engine.stake_too_small", market_id=market_id, stake=position.stake_usd)
@@ -532,10 +605,44 @@ class TradingEngine:
             )
             return result
 
+        # ── Smart Entry: Calculate optimal entry price ───────────────
+        entry_plan = None
+        execution_strategy = "simple"
+        try:
+            regime_patience = (
+                self._current_regime.entry_patience
+                if self._current_regime else 1.0
+            )
+            entry_plan = self._smart_entry.calculate_entry(
+                market_id=market_id,
+                side=edge_result.direction,
+                current_price=implied_price,
+                fair_value=forecast.model_probability,
+                edge=edge_result.abs_net_edge,
+                spread=getattr(features, "spread", 0.0),
+                hours_to_resolution=getattr(features, "hours_to_resolution", 720.0),
+                regime_patience=regime_patience,
+            )
+            if entry_plan and entry_plan.recommended_price > 0:
+                old_price = implied_price
+                implied_price = entry_plan.recommended_price
+                if entry_plan.recommended_strategy == "twap":
+                    execution_strategy = "twap"
+                log.info(
+                    "engine.smart_entry",
+                    market_id=market_id,
+                    old_price=round(old_price, 4),
+                    new_price=round(implied_price, 4),
+                    strategy=entry_plan.recommended_strategy,
+                    improvement_bps=round(entry_plan.expected_improvement_bps, 1),
+                )
+        except Exception as e:
+            log.warning("engine.smart_entry_error", error=str(e))
+
         orders = build_order(
             market_id=market_id, token_id=token_id,
             position=position, implied_price=implied_price,
-            config=self.config.execution, execution_strategy="simple",
+            config=self.config.execution, execution_strategy=execution_strategy,
         )
 
         clob = CLOBClient()
@@ -610,6 +717,26 @@ class TradingEngine:
             direction=edge_result.direction, stake=position.stake_usd,
             edge=round(forecast.edge, 3), status=order_statuses,
         )
+
+        # ── Record for adaptive weighting (model accuracy log) ───────
+        try:
+            if self._db and hasattr(forecast, 'model_forecasts'):
+                for model_name, prob in (forecast.model_forecasts or {}).items():
+                    self._db.conn.execute("""
+                        INSERT INTO model_forecast_log
+                            (model_name, market_id, category, forecast_prob,
+                             actual_outcome, recorded_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (
+                        model_name, market_id,
+                        classification.category if classification else "UNKNOWN",
+                        prob, -1.0,  # actual_outcome set to -1 = unresolved
+                        time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    ))
+                    self._db.conn.commit()
+        except Exception as e:
+            log.warning("engine.model_forecast_log_error", error=str(e))
+
         return result
 
     def _log_candidate(

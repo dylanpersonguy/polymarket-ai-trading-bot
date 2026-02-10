@@ -1067,6 +1067,222 @@ def api_config_reset() -> Any:
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
+# ─── API: Performance Analytics ────────────────────────────────────
+
+@app.route("/api/analytics")
+def api_analytics() -> Any:
+    """Return comprehensive performance analytics snapshot."""
+    from src.analytics.performance_tracker import PerformanceTracker
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        cfg = _get_config()
+        tracker = PerformanceTracker(bankroll=cfg.risk.bankroll)
+        snapshot = tracker.compute(conn)
+        return jsonify(snapshot.to_dict())
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/regime")
+def api_regime() -> Any:
+    """Return current market regime and history."""
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        # Latest regime
+        current = None
+        try:
+            row = conn.execute("""
+                SELECT regime, confidence, kelly_multiplier, size_multiplier,
+                       explanation, detected_at
+                FROM regime_history
+                ORDER BY detected_at DESC LIMIT 1
+            """).fetchone()
+            if row:
+                current = dict(row)
+        except sqlite3.OperationalError:
+            pass
+
+        # Regime history (last 50)
+        history = []
+        try:
+            rows = conn.execute("""
+                SELECT regime, confidence, kelly_multiplier, size_multiplier,
+                       explanation, detected_at
+                FROM regime_history
+                ORDER BY detected_at DESC LIMIT 50
+            """).fetchall()
+            history = [dict(r) for r in rows]
+        except sqlite3.OperationalError:
+            pass
+
+        return jsonify({
+            "current": current,
+            "history": history,
+        })
+    finally:
+        conn.close()
+
+
+@app.route("/api/calibration-curve")
+def api_calibration_curve() -> Any:
+    """Return calibration data for plotting."""
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        rows = []
+        try:
+            rows = conn.execute("""
+                SELECT forecast_prob, actual_outcome
+                FROM calibration_history
+                ORDER BY recorded_at ASC
+            """).fetchall()
+        except sqlite3.OperationalError:
+            pass
+
+        if not rows:
+            return jsonify({"bins": [], "counts": 0})
+
+        # Build calibration bins (0.0-0.1, 0.1-0.2, ... 0.9-1.0)
+        num_bins = 10
+        bin_forecasts: dict[int, list[float]] = {i: [] for i in range(num_bins)}
+        bin_outcomes: dict[int, list[float]] = {i: [] for i in range(num_bins)}
+
+        for r in rows:
+            fp = float(r["forecast_prob"])
+            ao = float(r["actual_outcome"])
+            b = min(int(fp * num_bins), num_bins - 1)
+            bin_forecasts[b].append(fp)
+            bin_outcomes[b].append(ao)
+
+        bins = []
+        for i in range(num_bins):
+            if bin_forecasts[i]:
+                bins.append({
+                    "range": f"{i / num_bins:.1f}-{(i + 1) / num_bins:.1f}",
+                    "midpoint": (i + 0.5) / num_bins,
+                    "avg_forecast": sum(bin_forecasts[i]) / len(bin_forecasts[i]),
+                    "avg_outcome": sum(bin_outcomes[i]) / len(bin_outcomes[i]),
+                    "count": len(bin_forecasts[i]),
+                })
+
+        return jsonify({
+            "bins": bins,
+            "total_samples": len(rows),
+        })
+    finally:
+        conn.close()
+
+
+@app.route("/api/model-accuracy")
+def api_model_accuracy() -> Any:
+    """Return per-model accuracy breakdown."""
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        rows = []
+        try:
+            rows = conn.execute("""
+                SELECT model_name,
+                       COUNT(*) as total_forecasts,
+                       AVG(ABS(forecast_prob - actual_outcome)) as avg_error,
+                       AVG((forecast_prob - actual_outcome) *
+                           (forecast_prob - actual_outcome)) as brier_score
+                FROM model_forecast_log
+                WHERE actual_outcome >= 0
+                GROUP BY model_name
+                ORDER BY brier_score ASC
+            """).fetchall()
+        except sqlite3.OperationalError:
+            pass
+
+        models = [
+            {
+                "model_name": r["model_name"],
+                "total_forecasts": int(r["total_forecasts"]),
+                "avg_error": round(float(r["avg_error"] or 0), 4),
+                "brier_score": round(float(r["brier_score"] or 0), 4),
+            }
+            for r in rows
+        ]
+
+        # Per-category breakdown
+        cat_rows = []
+        try:
+            cat_rows = conn.execute("""
+                SELECT model_name, category,
+                       COUNT(*) as cnt,
+                       AVG((forecast_prob - actual_outcome) *
+                           (forecast_prob - actual_outcome)) as brier
+                FROM model_forecast_log
+                WHERE actual_outcome >= 0
+                GROUP BY model_name, category
+                ORDER BY model_name, brier ASC
+            """).fetchall()
+        except sqlite3.OperationalError:
+            pass
+
+        by_category = [
+            {
+                "model_name": r["model_name"],
+                "category": r["category"],
+                "forecasts": int(r["cnt"]),
+                "brier_score": round(float(r["brier"] or 0), 4),
+            }
+            for r in cat_rows
+        ]
+
+        return jsonify({
+            "models": models,
+            "by_category": by_category,
+        })
+    finally:
+        conn.close()
+
+
+@app.route("/api/adaptive-weights")
+def api_adaptive_weights() -> Any:
+    """Return current adaptive model weights per category."""
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        from src.analytics.adaptive_weights import AdaptiveModelWeighter
+        cfg = _get_config()
+        weighter = AdaptiveModelWeighter(cfg.ensemble)
+        all_weights = weighter.get_all_category_weights(conn)
+        return jsonify({
+            cat: result.to_dict()
+            for cat, result in all_weights.items()
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/equity-curve")
+def api_equity_curve() -> Any:
+    """Return equity curve data for charting."""
+    from src.analytics.performance_tracker import PerformanceTracker
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        cfg = _get_config()
+        tracker = PerformanceTracker(bankroll=cfg.risk.bankroll)
+        snapshot = tracker.compute(conn)
+        return jsonify({
+            "points": [e.to_dict() for e in snapshot.equity_curve],
+            "bankroll": cfg.risk.bankroll,
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        conn.close()
+
+
 # ─── API: Export Data ──────────────────────────────────────────────
 
 @app.route("/api/export/<table_name>")

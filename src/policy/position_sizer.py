@@ -52,6 +52,7 @@ def calculate_position_size(
     timeline_multiplier: float = 1.0,
     price_volatility: float = 0.0,
     portfolio_gate: tuple[bool, str] = (True, "ok"),
+    regime_multiplier: float = 1.0,
 ) -> PositionSize:
     """Calculate position size using fractional Kelly with drawdown + timeline adjustments.
 
@@ -119,7 +120,7 @@ def calculate_position_size(
         vol_mult = max(0.6, 1.0 - (price_volatility - 0.10) * 3)
 
     # Apply all multipliers
-    combined_mult = kelly_mult * drawdown_multiplier * timeline_multiplier * vol_mult
+    combined_mult = kelly_mult * drawdown_multiplier * timeline_multiplier * vol_mult * regime_multiplier
     adj_kelly = full_kelly_frac * combined_mult
     full_kelly_stake = adj_kelly * risk_config.bankroll
 
@@ -168,5 +169,6 @@ def calculate_position_size(
         dd_mult=round(drawdown_multiplier, 2),
         tl_mult=round(timeline_multiplier, 2),
         vol_mult=round(vol_mult, 2),
+        regime_mult=round(regime_multiplier, 2),
     )
     return result
