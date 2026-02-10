@@ -334,11 +334,18 @@ class TradingEngine:
         market_id = market.id
         question = market.question
 
+        # ── Stage 0: Classification ──────────────────────────────────
+        from src.engine.market_classifier import classify_and_log
+        classification = classify_and_log(market)
+
         log.info(
             "engine.pipeline_start",
             market_id=market_id,
             question=question[:80],
             market_type=market.market_type,
+            category=classification.category,
+            subcategory=classification.subcategory,
+            researchability=classification.researchability,
         )
 
         # ── Stage 1: Research ────────────────────────────────────────
@@ -351,7 +358,9 @@ class TradingEngine:
         source_fetcher = SourceFetcher(search_provider, self.config.research)
 
         try:
-            queries = build_queries(market, max_queries=6)
+            # Adaptive query budget from classifier
+            max_q = classification.recommended_queries
+            queries = build_queries(market, max_queries=max_q)
             sources = await source_fetcher.fetch_sources(
                 queries, market_type=market.market_type,
                 max_sources=self.config.research.max_sources,
@@ -446,7 +455,10 @@ class TradingEngine:
                 reasoning=forecast.reasoning[:500],
                 evidence_json=json.dumps(forecast.evidence[:5]),
                 invalidation_triggers_json=json.dumps(forecast.invalidation_triggers),
-                research_evidence_json=json.dumps(evidence.to_dict()),
+                research_evidence_json=json.dumps({
+                    **evidence.to_dict(),
+                    "classification": classification.to_dict(),
+                }),
             ))
 
         # ── Decision Gate ────────────────────────────────────────────

@@ -33,7 +33,8 @@ class FakeMarket:
     """Lightweight stand-in for GammaMarket in tests."""
     def __init__(self, **kwargs):
         defaults = dict(
-            id="m1", condition_id="c1", question="Will X happen?",
+            id="m1", condition_id="c1",
+            question="Will the Federal Reserve cut interest rates?",
             description="", category="", market_type="MACRO",
             end_date=dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=30),
             active=True, closed=False, volume=50_000.0, liquidity=20_000.0,
@@ -305,7 +306,8 @@ def _make_markets(n: int, **overrides) -> list:
     markets = []
     for i in range(n):
         kwargs = dict(
-            id=f"m{i}", question=f"Question {i}",
+            id=f"m{i}",
+            question=f"Will the Federal Reserve cut interest rates in Q{i + 1}?",
             volume=50_000, liquidity=20_000,
             best_bid=0.5, spread=0.02,
             market_type="MACRO",

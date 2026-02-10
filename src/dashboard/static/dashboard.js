@@ -954,6 +954,65 @@ function renderDecisionDetail(entry, idx) {
             html += '</div>';
         }
 
+        if (stage.name === 'Classification') {
+            html += '<div class="dc-kv-grid">';
+            html += kvPill('Category', d.category || 'UNKNOWN');
+            html += kvPill('Subcategory', (d.subcategory || 'unknown').replace(/_/g, ' '));
+            html += kvPill('Strategy', (d.search_strategy || '—').replace(/_/g, ' '));
+            html += kvPill('Query Budget', d.recommended_queries || '—');
+            html += kvPillClass('Worth Research', d.worth_researching ? 'YES' : 'NO',
+                d.worth_researching ? 'pnl-positive' : 'pnl-negative');
+            html += '</div>';
+
+            // Researchability bar
+            const rPct = d.researchability || 0;
+            const rColor = rPct >= 70 ? '#00d68f' : rPct >= 40 ? '#f59e0b' : '#ef4444';
+            html += `<div class="dc-quality-breakdown">
+                <div class="dc-evidence-title">🔬 Researchability Score</div>
+                <div class="dc-quality-row">
+                    <span class="dc-quality-label">Score</span>
+                    <div class="dc-quality-track"><div class="dc-quality-fill" style="width:${rPct}%;background:${rColor}"></div></div>
+                    <span class="dc-quality-val">${rPct}%</span>
+                </div>
+            </div>`;
+
+            // Researchability reasons
+            if (d.researchability_reasons && d.researchability_reasons.length > 0) {
+                html += '<div class="dc-research-summary">';
+                html += '<div class="dc-evidence-title">💡 Why this score</div>';
+                d.researchability_reasons.forEach(r => {
+                    html += `<div class="dc-summary-text" style="margin-bottom:4px;">• ${escHtml(r)}</div>`;
+                });
+                html += '</div>';
+            }
+
+            // Primary sources
+            if (d.primary_sources && d.primary_sources.length > 0) {
+                html += '<div class="dc-research-summary">';
+                html += '<div class="dc-evidence-title">📡 Primary Sources</div>';
+                html += '<div class="dc-kv-grid">';
+                d.primary_sources.forEach(s => {
+                    html += `<div class="dc-kv"><span class="dc-kv-value" style="font-size:12px;">${escHtml(s)}</span></div>`;
+                });
+                html += '</div></div>';
+            }
+
+            // Tags
+            if (d.tags && d.tags.length > 0) {
+                html += '<div class="dc-research-summary">';
+                html += '<div class="dc-evidence-title">🏷️ Tags</div>';
+                html += '<div class="dc-kv-grid">';
+                d.tags.forEach(t => {
+                    const tagColor = t === 'scheduled_event' ? '#3b82f6' :
+                                     t === 'high_signal' ? '#00d68f' :
+                                     t === 'unpredictable' ? '#ef4444' :
+                                     t === 'volatile' ? '#f59e0b' : '#a78bfa';
+                    html += `<div class="dc-kv"><span class="dc-kv-value" style="font-size:11px;background:${tagColor}20;color:${tagColor};padding:2px 8px;border-radius:10px;">${escHtml(t.replace(/_/g, ' '))}</span></div>`;
+                });
+                html += '</div></div>';
+            }
+        }
+
         if (stage.name === 'Research') {
             html += '<div class="dc-kv-grid">';
             html += kvPill('Sources', d.num_sources || 0);

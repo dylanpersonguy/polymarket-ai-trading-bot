@@ -703,6 +703,27 @@ def api_decision_log() -> Any:
                 },
             })
 
+            # Stage 1.5: Classification (from market classifier)
+            classification_data = research_evidence.get("classification", {})
+            if classification_data:
+                stages.append({
+                    "name": "Classification",
+                    "icon": "🏷️",
+                    "status": "passed" if classification_data.get("worth_researching", True) else "blocked",
+                    "details": {
+                        "category": classification_data.get("category", "UNKNOWN"),
+                        "subcategory": classification_data.get("subcategory", "unknown"),
+                        "researchability": classification_data.get("researchability", 0),
+                        "researchability_reasons": classification_data.get("researchability_reasons", []),
+                        "primary_sources": classification_data.get("primary_sources", []),
+                        "search_strategy": classification_data.get("search_strategy", ""),
+                        "recommended_queries": classification_data.get("recommended_queries", 4),
+                        "worth_researching": classification_data.get("worth_researching", True),
+                        "confidence": classification_data.get("confidence", 0),
+                        "tags": classification_data.get("tags", []),
+                    },
+                })
+
             # Stage 2: Research
             research_status = "passed" if cd.get("num_sources", 0) > 0 else "skipped"
             research_details: dict[str, Any] = {

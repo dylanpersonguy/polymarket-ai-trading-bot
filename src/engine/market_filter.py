@@ -16,6 +16,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from src.engine.market_classifier import (
+    MarketClassification,
+    classify_market,
+)
 from src.observability.logger import get_logger
 
 log = get_logger(__name__)
@@ -56,6 +60,7 @@ class FilterResult:
     passed: bool
     rejection_reason: str = ""
     breakdown: Dict[str, int] = field(default_factory=dict)
+    classification: Optional[MarketClassification] = None
 
 
 @dataclass
@@ -115,7 +120,8 @@ class ResearchCache:
 _BLOCKED_TYPES: set[str] = {"UNKNOWN"}
 
 
-def _hard_reject(market: Any, blocked_types: set[str] | None = None) -> Optional[str]:
+def _hard_reject(market: Any, blocked_types: set[str] | None = None,
+                 classification: MarketClassification | None = None) -> Optional[str]:
     """Return rejection reason string, or None if the market passes."""
     # No token IDs → can't trade
     if not getattr(market, "tokens", None):
@@ -129,10 +135,14 @@ def _hard_reject(market: Any, blocked_types: set[str] | None = None) -> Optional
     if not getattr(market, "active", True):
         return "market_inactive"
 
-    # Blocked market type
+    # Blocked market type (legacy)
     types = blocked_types if blocked_types is not None else _BLOCKED_TYPES
     if getattr(market, "market_type", "") in types:
         return f"blocked_type:{market.market_type}"
+
+    # Classifier-based rejection: not worth researching
+    if classification and not classification.worth_researching:
+        return f"not_researchable:{classification.category}/{classification.subcategory}"
 
     # Blocked keywords in question
     q = getattr(market, "question", "").lower()
@@ -145,7 +155,8 @@ def _hard_reject(market: Any, blocked_types: set[str] | None = None) -> Optional
 
 # ── Soft scoring ─────────────────────────────────────────────────────
 
-def _score_market(market: Any, preferred_types: list[str] | None = None) -> tuple[int, Dict[str, int]]:
+def _score_market(market: Any, preferred_types: list[str] | None = None,
+                  classification: MarketClassification | None = None) -> tuple[int, Dict[str, int]]:
     """Score a market 0–100.  Returns (total, breakdown)."""
     breakdown: Dict[str, int] = {}
     base = 50  # start at 50
@@ -241,6 +252,25 @@ def _score_market(market: Any, preferred_types: list[str] | None = None) -> tupl
     kw_bonus = min(kw_hits * 5, 20)  # cap at +20
     breakdown["keywords"] = kw_bonus
 
+    # ── Classifier researchability bonus ─────────────────────────────
+    if classification:
+        # Map researchability 0-100 → bonus -15 to +15
+        r = classification.researchability
+        if r >= 80:
+            breakdown["researchability"] = 15
+        elif r >= 60:
+            breakdown["researchability"] = 8
+        elif r >= 40:
+            breakdown["researchability"] = 0
+        elif r >= 25:
+            breakdown["researchability"] = -8
+        else:
+            breakdown["researchability"] = -15
+
+        # Bonus for scheduled events (more predictable)
+        if "scheduled_event" in classification.tags:
+            breakdown["scheduled_event"] = 8
+
     total = max(0, min(100, base + sum(breakdown.values())))
     return total, breakdown
 
@@ -256,17 +286,25 @@ def score_market(
     market_id = getattr(market, "id", "?")
     question = getattr(market, "question", "?")
 
-    rejection = _hard_reject(market, blocked_types=blocked_types)
+    # Run classifier first
+    description = getattr(market, "description", "")
+    classification = classify_market(question, description)
+
+    rejection = _hard_reject(market, blocked_types=blocked_types,
+                             classification=classification)
     if rejection:
         return FilterResult(
             market_id=market_id, question=question,
             score=0, passed=False, rejection_reason=rejection,
+            classification=classification,
         )
 
-    score, breakdown = _score_market(market, preferred_types=preferred_types)
+    score, breakdown = _score_market(market, preferred_types=preferred_types,
+                                     classification=classification)
     return FilterResult(
         market_id=market_id, question=question,
         score=score, passed=True, breakdown=breakdown,
+        classification=classification,
     )
 
 
