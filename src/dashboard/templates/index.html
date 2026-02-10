@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polymarket Bot — Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- ─── Header ──────────────────────────────────────────── -->
+    <header>
+        <div class="header-left">
+            <h1>📊 Polymarket Bot</h1>
+            <span class="subtitle">Research & Trading Dashboard</span>
+        </div>
+        <div class="header-right">
+            <span id="mode-badge" class="badge badge-paper">PAPER MODE</span>
+            <span id="kill-switch-badge" class="badge badge-ok" style="display:none;">KILL SWITCH</span>
+            <span class="last-updated">Updated: <span id="last-updated-time">—</span></span>
+        </div>
+    </header>
+
+    <!-- ─── Portfolio Overview Cards ────────────────────────── -->
+    <section class="card-grid" id="portfolio-cards">
+        <div class="card accent-blue">
+            <div class="card-label">Bankroll</div>
+            <div class="card-value" id="bankroll">$0.00</div>
+            <div class="card-sub" id="available-capital">Available: $0.00</div>
+        </div>
+        <div class="card accent-green">
+            <div class="card-label">Total P&L</div>
+            <div class="card-value" id="total-pnl">$0.00</div>
+            <div class="card-sub" id="unrealized-pnl">Unrealized: $0.00</div>
+        </div>
+        <div class="card accent-purple">
+            <div class="card-label">Open Positions</div>
+            <div class="card-value" id="open-positions">0</div>
+            <div class="card-sub" id="total-invested">Invested: $0.00</div>
+        </div>
+        <div class="card accent-orange">
+            <div class="card-label">Total Trades</div>
+            <div class="card-value" id="total-trades">0</div>
+            <div class="card-sub" id="trade-breakdown">Live: 0 | Paper: 0</div>
+        </div>
+        <div class="card accent-teal">
+            <div class="card-label">Avg Edge</div>
+            <div class="card-value" id="avg-edge">0.00%</div>
+            <div class="card-sub" id="avg-evidence-quality">Avg EQ: 0.000</div>
+        </div>
+        <div class="card accent-pink">
+            <div class="card-label">Today's Activity</div>
+            <div class="card-value" id="today-trades">0 trades</div>
+            <div class="card-sub" id="daily-volume">Volume: $0.00</div>
+        </div>
+    </section>
+
+    <!-- ─── Charts Row ──────────────────────────────────────── -->
+    <section class="charts-row">
+        <div class="chart-container">
+            <h3>📈 Daily Forecasts & Trades</h3>
+            <canvas id="chart-daily-activity"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3>🎯 Edge & Evidence Quality</h3>
+            <canvas id="chart-edge-eq"></canvas>
+        </div>
+        <div class="chart-container chart-small">
+            <h3>🏷️ Market Types</h3>
+            <canvas id="chart-market-types"></canvas>
+        </div>
+    </section>
+
+    <!-- ─── Risk Monitor ────────────────────────────────────── -->
+    <section class="panel">
+        <h2>⚠️ Risk Monitor</h2>
+        <div class="risk-grid" id="risk-grid">
+            <div class="risk-item">
+                <div class="risk-label">Daily Exposure</div>
+                <div class="risk-bar-container">
+                    <div class="risk-bar" id="risk-bar-daily" style="width:0%"></div>
+                </div>
+                <div class="risk-values">
+                    <span id="risk-daily-current">$0</span> / <span id="risk-daily-limit">$0</span>
+                </div>
+            </div>
+            <div class="risk-item">
+                <div class="risk-label">Open Positions</div>
+                <div class="risk-bar-container">
+                    <div class="risk-bar" id="risk-bar-positions" style="width:0%"></div>
+                </div>
+                <div class="risk-values">
+                    <span id="risk-pos-current">0</span> / <span id="risk-pos-limit">0</span>
+                </div>
+            </div>
+            <div class="risk-item">
+                <div class="risk-label">Evidence Quality (recent avg)</div>
+                <div class="risk-bar-container">
+                    <div class="risk-bar bar-inverted" id="risk-bar-eq" style="width:0%"></div>
+                </div>
+                <div class="risk-values">
+                    <span id="risk-eq-current">0.00</span> / min <span id="risk-eq-limit">0.00</span>
+                </div>
+            </div>
+        </div>
+        <div class="risk-params" id="risk-params"></div>
+    </section>
+
+    <!-- ─── Active Positions ────────────────────────────────── -->
+    <section class="panel">
+        <h2>💼 Active Positions</h2>
+        <div class="table-wrap">
+            <table id="positions-table">
+                <thead>
+                    <tr>
+                        <th>Market</th>
+                        <th>Type</th>
+                        <th>Direction</th>
+                        <th>Entry</th>
+                        <th>Current</th>
+                        <th>Size</th>
+                        <th>Stake</th>
+                        <th>P&L</th>
+                        <th>P&L %</th>
+                        <th>Opened</th>
+                    </tr>
+                </thead>
+                <tbody id="positions-body">
+                    <tr><td colspan="10" class="empty-state">No active positions</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ─── Recent Forecasts ────────────────────────────────── -->
+    <section class="panel">
+        <h2>🔮 Recent Forecasts</h2>
+        <div class="table-wrap">
+            <table id="forecasts-table">
+                <thead>
+                    <tr>
+                        <th>Market</th>
+                        <th>Type</th>
+                        <th>Implied P</th>
+                        <th>Model P</th>
+                        <th>Edge</th>
+                        <th>EQ</th>
+                        <th>Sources</th>
+                        <th>Confidence</th>
+                        <th>Decision</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody id="forecasts-body">
+                    <tr><td colspan="10" class="empty-state">No forecasts yet</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ─── Trade History ───────────────────────────────────── -->
+    <section class="panel">
+        <h2>📜 Trade History</h2>
+        <div class="table-wrap">
+            <table id="trades-table">
+                <thead>
+                    <tr>
+                        <th>Market</th>
+                        <th>Type</th>
+                        <th>Side</th>
+                        <th>Price</th>
+                        <th>Size</th>
+                        <th>Stake</th>
+                        <th>Status</th>
+                        <th>Mode</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody id="trades-body">
+                    <tr><td colspan="9" class="empty-state">No trades yet</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ─── System Config ───────────────────────────────────── -->
+    <section class="panel">
+        <h2>⚙️ Configuration</h2>
+        <div class="config-grid" id="config-grid"></div>
+    </section>
+
+    <!-- ─── Footer ──────────────────────────────────────────── -->
+    <footer>
+        <span>Polymarket Research & Trading Bot — Dashboard</span>
+        <span>Auto-refreshes every 15s</span>
+    </footer>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>

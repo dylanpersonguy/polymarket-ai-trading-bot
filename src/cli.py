@@ -397,5 +397,24 @@ def trade(ctx: click.Context, live: bool) -> None:
     )
 
 
+# ─── DASHBOARD ───────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--host", default="127.0.0.1", help="Host to bind to")
+@click.option("--port", default=2345, help="Port to listen on")
+@click.option("--debug", is_flag=True, help="Enable Flask debug mode")
+@click.pass_context
+def dashboard(ctx: click.Context, host: str, port: int, debug: bool) -> None:
+    """Launch the monitoring dashboard web UI."""
+    from src.dashboard.app import run_dashboard
+
+    run_dashboard(
+        config_path=None,
+        host=host,
+        port=port,
+        debug=debug,
+    )
+
+
 if __name__ == "__main__":
     cli()
