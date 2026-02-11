@@ -479,11 +479,11 @@ def save_scan_result(conn: sqlite3.Connection, result: ScanResult) -> None:
              w.active_positions, w.total_volume, w.score, w.last_scanned),
         )
 
-    # Save conviction signals
+    # Save conviction signals (upsert – one row per market_slug+outcome)
     for sig in result.conviction_signals:
         import json
         conn.execute(
-            """INSERT INTO wallet_signals
+            """INSERT OR REPLACE INTO wallet_signals
                (market_slug, title, condition_id, outcome, whale_count,
                 total_whale_usd, avg_whale_price, current_price,
                 conviction_score, whale_names_json, direction,
@@ -496,10 +496,10 @@ def save_scan_result(conn: sqlite3.Connection, result: ScanResult) -> None:
              sig.signal_strength, sig.detected_at),
         )
 
-    # Save deltas
+    # Save deltas (ignore if exact duplicate already exists)
     for delta in result.deltas:
         conn.execute(
-            """INSERT INTO wallet_deltas
+            """INSERT OR IGNORE INTO wallet_deltas
                (wallet_address, wallet_name, action, market_slug,
                 title, outcome, size_change, value_change_usd,
                 current_price, detected_at)

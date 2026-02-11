@@ -8,7 +8,7 @@ from src.observability.logger import get_logger
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 _MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -442,6 +442,36 @@ _MIGRATIONS: dict[int, list[str]] = {
         """
         CREATE INDEX IF NOT EXISTS idx_wallet_deltas_wallet
             ON wallet_deltas(wallet_address);
+        """,
+    ],
+
+    # ── Migration 7: Deduplication constraints for wallet tables ──
+    7: [
+        # Remove duplicate wallet_signals keeping only the latest row per (market_slug, outcome)
+        """
+        DELETE FROM wallet_signals
+        WHERE id NOT IN (
+            SELECT MAX(id) FROM wallet_signals
+            GROUP BY market_slug, outcome
+        );
+        """,
+        # Add unique constraint so each market+outcome has at most one signal row
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_signals_unique
+            ON wallet_signals(market_slug, outcome);
+        """,
+        # Remove duplicate wallet_deltas keeping only the latest per (wallet_address, market_slug, outcome, action)
+        """
+        DELETE FROM wallet_deltas
+        WHERE id NOT IN (
+            SELECT MAX(id) FROM wallet_deltas
+            GROUP BY wallet_address, market_slug, outcome, action
+        );
+        """,
+        # Add unique constraint so each wallet+market+outcome+action has at most one delta row
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_deltas_unique
+            ON wallet_deltas(wallet_address, market_slug, outcome, action);
         """,
     ],
 }

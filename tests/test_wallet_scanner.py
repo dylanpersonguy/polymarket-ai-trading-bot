@@ -1004,14 +1004,14 @@ class TestMigration:
 
     def test_migration_creates_tables(self):
         from src.storage.migrations import run_migrations, SCHEMA_VERSION
-        assert SCHEMA_VERSION == 6
+        assert SCHEMA_VERSION == 7
 
         conn = sqlite3.connect(":memory:")
         run_migrations(conn)
 
         # Check schema version
         v = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
-        assert v == 6
+        assert v == 7
 
         # Check tables exist
         tables = {
@@ -1030,7 +1030,44 @@ class TestMigration:
         run_migrations(conn)
         run_migrations(conn)  # run again — should be no-op
         v = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
-        assert v == 6
+        assert v == 7
+        conn.close()
+    def test_signals_deduplication(self):
+        """Saving the same conviction signal twice should not create duplicates."""
+        from src.storage.migrations import run_migrations
+        from src.analytics.wallet_scanner import save_scan_result, ScanResult, ConvictionSignal
+
+        conn = sqlite3.connect(":memory:")
+        run_migrations(conn)
+
+        sig = ConvictionSignal(
+            market_slug="test-market",
+            title="Test Market",
+            condition_id="0xabc",
+            outcome="Yes",
+            whale_count=3,
+            total_whale_usd=50000.0,
+            avg_whale_price=0.65,
+            current_price=0.60,
+            conviction_score=0.85,
+            whale_names=["whale1", "whale2", "whale3"],
+            direction="bullish",
+            signal_strength="strong",
+            detected_at="2026-01-01T00:00:00Z",
+        )
+        result = ScanResult(
+            tracked_wallets=[],
+            conviction_signals=[sig],
+            deltas=[],
+            scanned_at="2026-01-01T00:00:00Z",
+        )
+
+        # Save twice
+        save_scan_result(conn, result)
+        save_scan_result(conn, result)
+
+        rows = conn.execute("SELECT COUNT(*) FROM wallet_signals").fetchone()[0]
+        assert rows == 1, f"Expected 1 signal row, got {rows}"
         conn.close()
 
 
