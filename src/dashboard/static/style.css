@@ -56,6 +56,70 @@ header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 .last-updated { font-size: 0.75rem; color: var(--text-muted); }
 
+/* ─── Tab Navigation ───────────────────────────────────────────── */
+.tab-nav {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    position: sticky;
+    top: 68px;
+    z-index: 99;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-dim);
+    font-family: var(--font);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex: 1;
+    justify-content: center;
+}
+
+.tab-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+}
+
+.tab-btn.active {
+    background: var(--accent-blue);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(76, 141, 255, 0.3);
+}
+
+.tab-icon { font-size: 1rem; }
+.tab-label { letter-spacing: -0.01em; }
+
+/* Tab content visibility */
+.tab-content {
+    display: none;
+    animation: tabFadeIn 0.25s ease;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+@keyframes tabFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 .badge {
     font-size: 0.7rem;
     font-weight: 700;
@@ -1571,6 +1635,10 @@ footer {
     .dc-summary-bottom { flex-direction: column; }
     .dc-mini-prob { display: none; }
     .dc-category-badge { display: none; }
+    .tab-nav { top: 0; }
+    .tab-btn { padding: 8px 12px; font-size: 0.75rem; }
+    .tab-label { display: none; }
+    .tab-icon { font-size: 1.2rem; }
 }
 
 /* ─── Performance Analytics ────────────────────────────────────── */

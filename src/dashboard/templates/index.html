@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Polymarket Bot — Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css?v=10">
+    <link rel="stylesheet" href="/static/style.css?v=11">
 </head>
 <body>
     <!-- ─── Toast Container ─────────────────────────────────── -->
@@ -37,457 +37,516 @@
         </div>
     </header>
 
-    <!-- ─── Portfolio Overview Cards ────────────────────────── -->
-    <section class="card-grid" id="portfolio-cards">
-        <div class="card accent-blue">
-            <div class="card-label">Bankroll</div>
-            <div class="card-value" id="bankroll">$0.00</div>
-            <div class="card-sub" id="available-capital">Available: $0.00</div>
-        </div>
-        <div class="card accent-green">
-            <div class="card-label">Total P&L</div>
-            <div class="card-value" id="total-pnl">$0.00</div>
-            <div class="card-sub" id="unrealized-pnl">Unrealized: $0.00</div>
-        </div>
-        <div class="card accent-purple">
-            <div class="card-label">Open Positions</div>
-            <div class="card-value" id="open-positions">0</div>
-            <div class="card-sub" id="total-invested">Invested: $0.00</div>
-        </div>
-        <div class="card accent-orange">
-            <div class="card-label">Total Trades</div>
-            <div class="card-value" id="total-trades">0</div>
-            <div class="card-sub" id="trade-breakdown">Live: 0 | Paper: 0</div>
-        </div>
-        <div class="card accent-teal">
-            <div class="card-label">Avg Edge</div>
-            <div class="card-value" id="avg-edge">0.00%</div>
-            <div class="card-sub" id="avg-evidence-quality">Avg EQ: 0.000</div>
-        </div>
-        <div class="card accent-pink">
-            <div class="card-label">Today's Activity</div>
-            <div class="card-value" id="today-trades">0 trades</div>
-            <div class="card-sub" id="daily-volume">Volume: $0.00</div>
-        </div>
-    </section>
+    <!-- ─── Tab Navigation ──────────────────────────────────── -->
+    <nav class="tab-nav" id="tab-nav">
+        <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')">
+            <span class="tab-icon">📊</span>
+            <span class="tab-label">Overview</span>
+        </button>
+        <button class="tab-btn" data-tab="trading" onclick="switchTab('trading')">
+            <span class="tab-icon">💼</span>
+            <span class="tab-label">Trading</span>
+        </button>
+        <button class="tab-btn" data-tab="analytics" onclick="switchTab('analytics')">
+            <span class="tab-icon">📈</span>
+            <span class="tab-label">Analytics</span>
+        </button>
+        <button class="tab-btn" data-tab="whales" onclick="switchTab('whales')">
+            <span class="tab-icon">🐋</span>
+            <span class="tab-label">Whale Tracker</span>
+        </button>
+        <button class="tab-btn" data-tab="system" onclick="switchTab('system')">
+            <span class="tab-icon">⚙️</span>
+            <span class="tab-label">System</span>
+        </button>
+    </nav>
 
-    <!-- ─── Charts Row ──────────────────────────────────────── -->
-    <section class="charts-row">
-        <div class="chart-container">
-            <h3>📈 Daily Forecasts & Trades</h3>
-            <canvas id="chart-daily-activity"></canvas>
-        </div>
-        <div class="chart-container">
-            <h3>🎯 Edge & Evidence Quality</h3>
-            <canvas id="chart-edge-eq"></canvas>
-        </div>
-        <div class="chart-container chart-small">
-            <h3>🏷️ Market Types</h3>
-            <canvas id="chart-market-types"></canvas>
-        </div>
-    </section>
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- TAB 1: OVERVIEW                                         -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <div class="tab-content active" id="tab-overview" data-tab="overview">
 
-    <!-- ─── Equity Curve ────────────────────────────────────── -->
-    <section class="charts-row charts-row-single">
-        <div class="chart-container chart-wide">
-            <h3>💰 Equity Curve (Cumulative P&L)</h3>
-            <canvas id="chart-equity-curve"></canvas>
-        </div>
-    </section>
-
-    <!-- ─── Performance Analytics ───────────────────────────── -->
-    <section class="panel" id="analytics-panel">
-        <div class="panel-header">
-            <h2>📊 Performance Analytics</h2>
-        </div>
-
-        <!-- Analytics KPI Cards -->
-        <div class="card-grid analytics-cards" id="analytics-kpi-cards">
-            <div class="card accent-green">
-                <div class="card-label">Win Rate</div>
-                <div class="card-value" id="ana-win-rate">—</div>
-                <div class="card-sub" id="ana-win-rate-sub">7d: — | 30d: —</div>
-            </div>
+        <!-- ─── Portfolio Overview Cards ────────────────────────── -->
+        <section class="card-grid" id="portfolio-cards">
             <div class="card accent-blue">
-                <div class="card-label">Sharpe Ratio</div>
-                <div class="card-value" id="ana-sharpe">—</div>
-                <div class="card-sub" id="ana-sortino-sub">Sortino: —</div>
+                <div class="card-label">Bankroll</div>
+                <div class="card-value" id="bankroll">$0.00</div>
+                <div class="card-sub" id="available-capital">Available: $0.00</div>
+            </div>
+            <div class="card accent-green">
+                <div class="card-label">Total P&L</div>
+                <div class="card-value" id="total-pnl">$0.00</div>
+                <div class="card-sub" id="unrealized-pnl">Unrealized: $0.00</div>
             </div>
             <div class="card accent-purple">
-                <div class="card-label">Profit Factor</div>
-                <div class="card-value" id="ana-profit-factor">—</div>
-                <div class="card-sub" id="ana-pf-sub">Avg Win/Loss: —</div>
+                <div class="card-label">Open Positions</div>
+                <div class="card-value" id="open-positions">0</div>
+                <div class="card-sub" id="total-invested">Invested: $0.00</div>
             </div>
             <div class="card accent-orange">
-                <div class="card-label">Max Drawdown</div>
-                <div class="card-value" id="ana-max-dd">—</div>
-                <div class="card-sub" id="ana-calmar-sub">Calmar: —</div>
+                <div class="card-label">Total Trades</div>
+                <div class="card-value" id="total-trades">0</div>
+                <div class="card-sub" id="trade-breakdown">Live: 0 | Paper: 0</div>
             </div>
             <div class="card accent-teal">
-                <div class="card-label">ROI</div>
-                <div class="card-value" id="ana-roi">—</div>
-                <div class="card-sub" id="ana-roi-sub">Total Staked: —</div>
+                <div class="card-label">Avg Edge</div>
+                <div class="card-value" id="avg-edge">0.00%</div>
+                <div class="card-sub" id="avg-evidence-quality">Avg EQ: 0.000</div>
             </div>
             <div class="card accent-pink">
-                <div class="card-label">Streak</div>
-                <div class="card-value" id="ana-streak">—</div>
-                <div class="card-sub" id="ana-streak-sub">Best: — | Worst: —</div>
+                <div class="card-label">Today's Activity</div>
+                <div class="card-value" id="today-trades">0 trades</div>
+                <div class="card-sub" id="daily-volume">Volume: $0.00</div>
             </div>
-        </div>
+        </section>
 
-        <!-- Analytics Charts Row -->
-        <div class="charts-row">
+        <!-- ─── Charts Row ──────────────────────────────────────── -->
+        <section class="charts-row">
             <div class="chart-container">
-                <h3>📊 Category P&L Breakdown</h3>
-                <canvas id="chart-category-pnl"></canvas>
+                <h3>📈 Daily Forecasts & Trades</h3>
+                <canvas id="chart-daily-activity"></canvas>
             </div>
             <div class="chart-container">
-                <h3>🎯 Calibration Accuracy</h3>
-                <canvas id="chart-calibration"></canvas>
+                <h3>🎯 Edge & Evidence Quality</h3>
+                <canvas id="chart-edge-eq"></canvas>
             </div>
             <div class="chart-container chart-small">
-                <h3>🤖 Model Accuracy</h3>
-                <canvas id="chart-model-accuracy"></canvas>
+                <h3>🏷️ Market Types</h3>
+                <canvas id="chart-market-types"></canvas>
             </div>
-        </div>
+        </section>
 
-        <!-- Strategy Leaderboard -->
-        <div class="table-wrap" style="margin-top:16px;">
-            <h3 style="margin:0 0 8px 0;">🏆 Strategy Leaderboard</h3>
-            <table id="leaderboard-table">
-                <thead><tr>
-                    <th>Rank</th><th>Category</th><th>ROI %</th><th>Win Rate</th>
-                    <th>Total P&L</th><th>Trades</th><th>Avg Edge</th><th>Score</th>
-                </tr></thead>
-                <tbody id="leaderboard-body">
-                    <tr><td colspan="8" class="empty-state">No analytics data yet — resolved trades populate this view</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <!-- ─── Market Regime ───────────────────────────────────── -->
-    <section class="panel" id="regime-panel">
-        <div class="panel-header">
-            <h2>🌡️ Market Regime</h2>
-        </div>
-        <div class="card-grid" id="regime-cards">
-            <div class="card accent-blue">
-                <div class="card-label">Current Regime</div>
-                <div class="card-value" id="regime-current">NORMAL</div>
-                <div class="card-sub" id="regime-confidence">Confidence: —</div>
+        <!-- ─── Equity Curve ────────────────────────────────────── -->
+        <section class="charts-row charts-row-single">
+            <div class="chart-container chart-wide">
+                <h3>💰 Equity Curve (Cumulative P&L)</h3>
+                <canvas id="chart-equity-curve"></canvas>
             </div>
-            <div class="card accent-green">
-                <div class="card-label">Kelly Multiplier</div>
-                <div class="card-value" id="regime-kelly">1.00x</div>
-                <div class="card-sub" id="regime-size-mult">Size: 1.00x</div>
+        </section>
+
+        <!-- ─── Engine & Drawdown Status ────────────────────────── -->
+        <section class="card-grid" id="engine-cards">
+            <div class="card accent-teal">
+                <div class="card-label">Engine Status</div>
+                <div class="card-value" id="engine-status">OFF</div>
+                <div class="card-sub" id="engine-cycles">Cycles: 0</div>
+                <div class="card-sub" style="margin-top:6px;">
+                    <button class="btn btn-ok" id="btn-engine-start" onclick="toggleEngine(true)" style="font-size:0.75rem;">▶ Start</button>
+                    <button class="btn btn-danger" id="btn-engine-stop" onclick="toggleEngine(false)" style="font-size:0.75rem;display:none;">⏹ Stop</button>
+                </div>
+            </div>
+            <div class="card accent-pink">
+                <div class="card-label">Drawdown</div>
+                <div class="card-value" id="drawdown-pct">0.0%</div>
+                <div class="card-sub" id="drawdown-detail">Peak: $0 | Current: $0</div>
             </div>
             <div class="card accent-purple">
-                <div class="card-label">Regime Explanation</div>
-                <div class="card-value" id="regime-explanation" style="font-size:0.85rem;line-height:1.4;">—</div>
-                <div class="card-sub" id="regime-detected-at">—</div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ─── Risk Monitor ────────────────────────────────────── -->
-    <section class="panel">
-        <h2>⚠️ Risk Monitor</h2>
-        <div class="risk-grid" id="risk-grid">
-            <div class="risk-item">
-                <div class="risk-label">Daily Exposure</div>
-                <div class="risk-bar-container">
-                    <div class="risk-bar" id="risk-bar-daily" style="width:0%"></div>
-                </div>
-                <div class="risk-values">
-                    <span id="risk-daily-current">$0</span> / <span id="risk-daily-limit">$0</span>
-                </div>
-            </div>
-            <div class="risk-item">
-                <div class="risk-label">Open Positions</div>
-                <div class="risk-bar-container">
-                    <div class="risk-bar" id="risk-bar-positions" style="width:0%"></div>
-                </div>
-                <div class="risk-values">
-                    <span id="risk-pos-current">0</span> / <span id="risk-pos-limit">0</span>
-                </div>
-            </div>
-            <div class="risk-item">
-                <div class="risk-label">Evidence Quality (recent avg)</div>
-                <div class="risk-bar-container">
-                    <div class="risk-bar bar-inverted" id="risk-bar-eq" style="width:0%"></div>
-                </div>
-                <div class="risk-values">
-                    <span id="risk-eq-current">0.00</span> / min <span id="risk-eq-limit">0.00</span>
-                </div>
-            </div>
-        </div>
-        <div class="risk-params" id="risk-params"></div>
-    </section>
-
-    <!-- ─── Engine & Drawdown Status ────────────────────────── -->
-    <section class="card-grid" id="engine-cards">
-        <div class="card accent-teal">
-            <div class="card-label">Engine Status</div>
-            <div class="card-value" id="engine-status">OFF</div>
-            <div class="card-sub" id="engine-cycles">Cycles: 0</div>
-            <div class="card-sub" style="margin-top:6px;">
-                <button class="btn btn-ok" id="btn-engine-start" onclick="toggleEngine(true)" style="font-size:0.75rem;">▶ Start</button>
-                <button class="btn btn-danger" id="btn-engine-stop" onclick="toggleEngine(false)" style="font-size:0.75rem;display:none;">⏹ Stop</button>
-            </div>
-        </div>
-        <div class="card accent-pink">
-            <div class="card-label">Drawdown</div>
-            <div class="card-value" id="drawdown-pct">0.0%</div>
-            <div class="card-sub" id="drawdown-detail">Peak: $0 | Current: $0</div>
-        </div>
-        <div class="card accent-purple">
-            <div class="card-label">Heat Level</div>
-            <div class="card-value" id="heat-level">🟢 Cool</div>
-            <div class="card-sub" id="kelly-mult">Kelly multiplier: 1.0x</div>
-        </div>
-        <div class="card accent-orange">
-            <div class="card-label">Kill Switch</div>
-            <div class="card-value" id="kill-switch-status">OFF</div>
-            <div class="card-sub">
-                <button class="btn btn-danger" id="btn-kill-on" onclick="confirmKillSwitch(true)">Activate</button>
-                <button class="btn btn-ok" id="btn-kill-off" onclick="confirmKillSwitch(false)" style="display:none;">Deactivate</button>
-            </div>
-        </div>
-    </section>
-
-    <!-- ─── Active Positions ────────────────────────────────── -->
-    <section class="panel">
-        <div class="panel-header">
-            <h2>💼 Active Positions</h2>
-            <div class="panel-tools">
-                <input type="text" class="search-input" placeholder="🔍 Filter positions..." oninput="filterTable('positions-body', this.value)">
-                <button class="btn btn-export" onclick="exportData('positions')">📥 Export</button>
-            </div>
-        </div>
-        <div id="positions-summary"></div>
-        <div class="table-wrap">
-            <table id="positions-table">
-                <thead><tr>
-                    <th>Market</th><th>Type</th><th>Direction</th><th>Entry</th><th>Current</th>
-                    <th>Size</th><th>Stake</th><th>P&L</th><th>P&L %</th><th>Δ Price</th><th>Held</th>
-                </tr></thead>
-                <tbody id="positions-body">
-                    <tr><td colspan="11" class="empty-state">No active positions</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <!-- ─── Whale / Smart Money Tracker ─────────────────────── -->
-    <section class="panel" id="whale-tracker-panel">
-        <div class="panel-header">
-            <h2>🐋 Smart Money Tracker</h2>
-            <div class="panel-tools">
-                <span class="badge badge-paper" id="whale-last-scan">Last scan: —</span>
-            </div>
-        </div>
-
-        <!-- Whale Summary Cards -->
-        <div class="card-grid" id="whale-summary-cards">
-            <div class="card accent-blue">
-                <div class="card-label">Tracked Wallets</div>
-                <div class="card-value" id="whale-total-wallets">0</div>
-                <div class="card-sub">Top Polymarket traders</div>
-            </div>
-            <div class="card accent-green">
-                <div class="card-label">Conviction Signals</div>
-                <div class="card-value" id="whale-total-signals">0</div>
-                <div class="card-sub" id="whale-strong-signals">Strong: 0</div>
+                <div class="card-label">Heat Level</div>
+                <div class="card-value" id="heat-level">🟢 Cool</div>
+                <div class="card-sub" id="kelly-mult">Kelly multiplier: 1.0x</div>
             </div>
             <div class="card accent-orange">
-                <div class="card-label">Recent Entries</div>
-                <div class="card-value" id="whale-recent-entries">0</div>
-                <div class="card-sub" id="whale-recent-exits">Exits: 0</div>
+                <div class="card-label">Kill Switch</div>
+                <div class="card-value" id="kill-switch-status">OFF</div>
+                <div class="card-sub">
+                    <button class="btn btn-danger" id="btn-kill-on" onclick="confirmKillSwitch(true)">Activate</button>
+                    <button class="btn btn-ok" id="btn-kill-off" onclick="confirmKillSwitch(false)" style="display:none;">Deactivate</button>
+                </div>
             </div>
-        </div>
+        </section>
 
-        <!-- Conviction Signals Table -->
-        <div class="table-wrap" style="margin-top:16px;">
-            <h3 style="margin:0 0 8px 0;">🎯 Conviction Signals (Multi-Whale Consensus)</h3>
-            <table id="conviction-table">
-                <thead><tr>
-                    <th>Market</th><th>Outcome</th><th>Whales</th><th>Total $</th>
-                    <th>Avg Entry</th><th>Current</th><th>Score</th><th>Strength</th>
-                    <th>Direction</th><th>Who</th><th>Time</th>
-                </tr></thead>
-                <tbody id="conviction-body">
-                    <tr><td colspan="11" class="empty-state">No conviction signals yet — run a wallet scan to populate</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Recent Whale Activity (Deltas) -->
-        <div class="table-wrap" style="margin-top:16px;">
-            <h3 style="margin:0 0 8px 0;">📡 Recent Whale Activity</h3>
-            <table id="whale-deltas-table">
-                <thead><tr>
-                    <th>Whale</th><th>Action</th><th>Market</th><th>Outcome</th>
-                    <th>Size Δ</th><th>Value Δ</th><th>Price</th><th>Time</th>
-                </tr></thead>
-                <tbody id="whale-deltas-body">
-                    <tr><td colspan="8" class="empty-state">No whale activity detected yet</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Tracked Wallets Leaderboard -->
-        <div class="table-wrap" style="margin-top:16px;">
-            <h3 style="margin:0 0 8px 0;">🏆 Tracked Wallets Leaderboard</h3>
-            <table id="tracked-wallets-table">
-                <thead><tr>
-                    <th>Rank</th><th>Name</th><th>Address</th><th>P&L</th>
-                    <th>Win Rate</th><th>Positions</th><th>Score</th><th>Last Scanned</th>
-                </tr></thead>
-                <tbody id="tracked-wallets-body">
-                    <tr><td colspan="8" class="empty-state">No wallets tracked yet</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <!-- ─── Pipeline Candidates Log ───────────────────────────── -->
-    <section class="panel">
-        <div class="panel-header">
-            <h2>🔬 Pipeline Candidates</h2>
-            <div class="panel-tools">
-                <input type="text" class="search-input" placeholder="🔍 Filter candidates..." oninput="filterTable('candidates-body', this.value)">
+        <!-- ─── Market Regime ───────────────────────────────────── -->
+        <section class="panel" id="regime-panel">
+            <div class="panel-header">
+                <h2>🌡️ Market Regime</h2>
             </div>
-        </div>
-        <div class="table-wrap">
-            <table id="candidates-table">
-                <thead><tr>
-                    <th>Cycle</th><th>Market</th><th>Type</th><th>Implied P</th><th>Model P</th>
-                    <th>Edge</th><th>EQ</th><th>Sources</th><th>Confidence</th>
-                    <th>Decision</th><th>Stake</th><th>Reason</th><th>Time</th>
-                </tr></thead>
-                <tbody id="candidates-body">
-                    <tr><td colspan="13" class="empty-state">No candidates processed yet</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <!-- ─── Decision Intelligence Log ───────────────────────── -->
-    <section class="panel" id="decision-log-panel">
-        <div class="panel-header">
-            <h2>🧠 Decision Intelligence Log</h2>
-            <div class="panel-tools">
-                <select id="decision-cycle-filter" class="search-input" style="width:160px;" onchange="updateDecisionLog()">
-                    <option value="">All Cycles</option>
-                </select>
-                <select id="decision-filter" class="search-input" style="width:140px;" onchange="filterDecisionCards()">
-                    <option value="">All Decisions</option>
-                    <option value="TRADE">✅ Trade</option>
-                    <option value="NO TRADE">❌ No Trade</option>
-                    <option value="SKIP">⏭️ Skip</option>
-                </select>
-                <button class="btn btn-export btn-sm" onclick="toggleDecisionExpand()" id="btn-expand-all">Expand All</button>
+            <div class="card-grid" id="regime-cards">
+                <div class="card accent-blue">
+                    <div class="card-label">Current Regime</div>
+                    <div class="card-value" id="regime-current">NORMAL</div>
+                    <div class="card-sub" id="regime-confidence">Confidence: —</div>
+                </div>
+                <div class="card accent-green">
+                    <div class="card-label">Kelly Multiplier</div>
+                    <div class="card-value" id="regime-kelly">1.00x</div>
+                    <div class="card-sub" id="regime-size-mult">Size: 1.00x</div>
+                </div>
+                <div class="card accent-purple">
+                    <div class="card-label">Regime Explanation</div>
+                    <div class="card-value" id="regime-explanation" style="font-size:0.85rem;line-height:1.4;">—</div>
+                    <div class="card-sub" id="regime-detected-at">—</div>
+                </div>
             </div>
-        </div>
-        <div id="decision-log-container">
-            <div class="empty-state" style="padding:40px 0;">No decision data yet — run an engine cycle to see how the bot makes decisions.</div>
-        </div>
-    </section>
+        </section>
 
-    <!-- ─── Recent Forecasts ────────────────────────────────── -->
-    <section class="panel">
-        <div class="panel-header">
-            <h2>🔮 Recent Forecasts</h2>
-            <div class="panel-tools">
-                <input type="text" class="search-input" placeholder="🔍 Filter forecasts..." oninput="filterTable('forecasts-body', this.value)">
-                <button class="btn btn-export" onclick="exportData('forecasts')">📥 Export</button>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- TAB 2: TRADING                                          -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <div class="tab-content" id="tab-trading" data-tab="trading">
+
+        <!-- ─── Active Positions ────────────────────────────────── -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2>� Active Positions</h2>
+                <div class="panel-tools">
+                    <input type="text" class="search-input" placeholder="🔍 Filter positions..." oninput="filterTable('positions-body', this.value)">
+                    <button class="btn btn-export" onclick="exportData('positions')">📥 Export</button>
+                </div>
             </div>
-        </div>
-        <div class="table-wrap">
-            <table id="forecasts-table">
-                <thead><tr>
-                    <th>Market</th><th>Type</th><th>Implied P</th><th>Model P</th><th>Edge</th>
-                    <th>EQ</th><th>Sources</th><th>Confidence</th><th>Decision</th><th>Time</th>
-                </tr></thead>
-                <tbody id="forecasts-body">
-                    <tr><td colspan="10" class="empty-state">No forecasts yet</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <!-- ─── Trade History ───────────────────────────────────── -->
-    <section class="panel">
-        <div class="panel-header">
-            <h2>📜 Trade History</h2>
-            <div class="panel-tools">
-                <input type="text" class="search-input" placeholder="🔍 Filter trades..." oninput="filterTable('trades-body', this.value)">
-                <button class="btn btn-export" onclick="exportData('trades')">📥 Export</button>
+            <div id="positions-summary"></div>
+            <div class="table-wrap">
+                <table id="positions-table">
+                    <thead><tr>
+                        <th>Market</th><th>Type</th><th>Direction</th><th>Entry</th><th>Current</th>
+                        <th>Size</th><th>Stake</th><th>P&L</th><th>P&L %</th><th>Δ Price</th><th>Held</th>
+                    </tr></thead>
+                    <tbody id="positions-body">
+                        <tr><td colspan="11" class="empty-state">No active positions</td></tr>
+                    </tbody>
+                </table>
             </div>
-        </div>
-        <div class="table-wrap">
-            <table id="trades-table">
-                <thead><tr>
-                    <th>Market</th><th>Type</th><th>Side</th><th>Price</th><th>Size</th>
-                    <th>Stake</th><th>Status</th><th>Mode</th><th>Time</th>
-                </tr></thead>
-                <tbody id="trades-body">
-                    <tr><td colspan="9" class="empty-state">No trades yet</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
+        </section>
 
-    <!-- ─── Audit Log ───────────────────────────────────────── -->
-    <section class="panel">
-        <div class="panel-header">
-            <h2>🔒 Audit Trail</h2>
-            <div class="panel-tools">
-                <input type="text" class="search-input" placeholder="🔍 Filter audit..." oninput="filterTable('audit-body', this.value)">
+        <!-- ─── Pipeline Candidates Log ───────────────────────────── -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2>🔬 Pipeline Candidates</h2>
+                <div class="panel-tools">
+                    <input type="text" class="search-input" placeholder="🔍 Filter candidates..." oninput="filterTable('candidates-body', this.value)">
+                </div>
             </div>
-        </div>
-        <div class="table-wrap">
-            <table id="audit-table">
-                <thead><tr>
-                    <th>ID</th><th>Market</th><th>Decision</th><th>Stage</th>
-                    <th>Details</th><th>Integrity</th><th>Time</th>
-                </tr></thead>
-                <tbody id="audit-body">
-                    <tr><td colspan="7" class="empty-state">No audit entries</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <!-- ─── Recent Alerts ───────────────────────────────────── -->
-    <section class="panel">
-        <h2>🔔 Recent Alerts</h2>
-        <div class="table-wrap">
-            <table id="alerts-table">
-                <thead><tr>
-                    <th>Level</th><th>Channel</th><th>Message</th><th>Time</th>
-                </tr></thead>
-                <tbody id="alerts-body">
-                    <tr><td colspan="4" class="empty-state">No alerts</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <!-- ─── System Config (Editable) ────────────────────────── -->
-    <section class="panel" id="config-panel">
-        <div class="panel-header">
-            <h2>⚙️ Configuration</h2>
-            <div class="panel-tools">
-                <button class="btn btn-save" onclick="saveAllConfig()">💾 Save All Changes</button>
-                <button class="btn btn-muted" onclick="confirmResetConfig()">🔄 Reset Defaults</button>
+            <div class="table-wrap">
+                <table id="candidates-table">
+                    <thead><tr>
+                        <th>Cycle</th><th>Market</th><th>Type</th><th>Implied P</th><th>Model P</th>
+                        <th>Edge</th><th>EQ</th><th>Sources</th><th>Confidence</th>
+                        <th>Decision</th><th>Stake</th><th>Reason</th><th>Time</th>
+                    </tr></thead>
+                    <tbody id="candidates-body">
+                        <tr><td colspan="13" class="empty-state">No candidates processed yet</td></tr>
+                    </tbody>
+                </table>
             </div>
-        </div>
-        <p class="config-hint">Edit any value below and click <strong>Save All Changes</strong> to persist to config.yaml. Changes take effect immediately.</p>
-        <div class="config-tabs" id="config-tabs"></div>
-        <div class="config-grid" id="config-grid"></div>
-    </section>
+        </section>
+
+        <!-- ─── Recent Forecasts ────────────────────────────────── -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2>🔮 Recent Forecasts</h2>
+                <div class="panel-tools">
+                    <input type="text" class="search-input" placeholder="🔍 Filter forecasts..." oninput="filterTable('forecasts-body', this.value)">
+                    <button class="btn btn-export" onclick="exportData('forecasts')">📥 Export</button>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table id="forecasts-table">
+                    <thead><tr>
+                        <th>Market</th><th>Type</th><th>Implied P</th><th>Model P</th><th>Edge</th>
+                        <th>EQ</th><th>Sources</th><th>Confidence</th><th>Decision</th><th>Time</th>
+                    </tr></thead>
+                    <tbody id="forecasts-body">
+                        <tr><td colspan="10" class="empty-state">No forecasts yet</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ─── Trade History ───────────────────────────────────── -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2>📜 Trade History</h2>
+                <div class="panel-tools">
+                    <input type="text" class="search-input" placeholder="🔍 Filter trades..." oninput="filterTable('trades-body', this.value)">
+                    <button class="btn btn-export" onclick="exportData('trades')">📥 Export</button>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table id="trades-table">
+                    <thead><tr>
+                        <th>Market</th><th>Type</th><th>Side</th><th>Price</th><th>Size</th>
+                        <th>Stake</th><th>Status</th><th>Mode</th><th>Time</th>
+                    </tr></thead>
+                    <tbody id="trades-body">
+                        <tr><td colspan="9" class="empty-state">No trades yet</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- TAB 3: ANALYTICS                                        -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <div class="tab-content" id="tab-analytics" data-tab="analytics">
+
+        <!-- ─── Performance Analytics ───────────────────────────── -->
+        <section class="panel" id="analytics-panel">
+            <div class="panel-header">
+                <h2>📊 Performance Analytics</h2>
+            </div>
+
+            <!-- Analytics KPI Cards -->
+            <div class="card-grid analytics-cards" id="analytics-kpi-cards">
+                <div class="card accent-green">
+                    <div class="card-label">Win Rate</div>
+                    <div class="card-value" id="ana-win-rate">—</div>
+                    <div class="card-sub" id="ana-win-rate-sub">7d: — | 30d: —</div>
+                </div>
+                <div class="card accent-blue">
+                    <div class="card-label">Sharpe Ratio</div>
+                    <div class="card-value" id="ana-sharpe">—</div>
+                    <div class="card-sub" id="ana-sortino-sub">Sortino: —</div>
+                </div>
+                <div class="card accent-purple">
+                    <div class="card-label">Profit Factor</div>
+                    <div class="card-value" id="ana-profit-factor">—</div>
+                    <div class="card-sub" id="ana-pf-sub">Avg Win/Loss: —</div>
+                </div>
+                <div class="card accent-orange">
+                    <div class="card-label">Max Drawdown</div>
+                    <div class="card-value" id="ana-max-dd">—</div>
+                    <div class="card-sub" id="ana-calmar-sub">Calmar: —</div>
+                </div>
+                <div class="card accent-teal">
+                    <div class="card-label">ROI</div>
+                    <div class="card-value" id="ana-roi">—</div>
+                    <div class="card-sub" id="ana-roi-sub">Total Staked: —</div>
+                </div>
+                <div class="card accent-pink">
+                    <div class="card-label">Streak</div>
+                    <div class="card-value" id="ana-streak">—</div>
+                    <div class="card-sub" id="ana-streak-sub">Best: — | Worst: —</div>
+                </div>
+            </div>
+
+            <!-- Analytics Charts Row -->
+            <div class="charts-row">
+                <div class="chart-container">
+                    <h3>📊 Category P&L Breakdown</h3>
+                    <canvas id="chart-category-pnl"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>🎯 Calibration Accuracy</h3>
+                    <canvas id="chart-calibration"></canvas>
+                </div>
+                <div class="chart-container chart-small">
+                    <h3>🤖 Model Accuracy</h3>
+                    <canvas id="chart-model-accuracy"></canvas>
+                </div>
+            </div>
+
+            <!-- Strategy Leaderboard -->
+            <div class="table-wrap" style="margin-top:16px;">
+                <h3 style="margin:0 0 8px 0;">🏆 Strategy Leaderboard</h3>
+                <table id="leaderboard-table">
+                    <thead><tr>
+                        <th>Rank</th><th>Category</th><th>ROI %</th><th>Win Rate</th>
+                        <th>Total P&L</th><th>Trades</th><th>Avg Edge</th><th>Score</th>
+                    </tr></thead>
+                    <tbody id="leaderboard-body">
+                        <tr><td colspan="8" class="empty-state">No analytics data yet — resolved trades populate this view</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ─── Decision Intelligence Log ───────────────────────── -->
+        <section class="panel" id="decision-log-panel">
+            <div class="panel-header">
+                <h2>🧠 Decision Intelligence Log</h2>
+                <div class="panel-tools">
+                    <select id="decision-cycle-filter" class="search-input" style="width:160px;" onchange="updateDecisionLog()">
+                        <option value="">All Cycles</option>
+                    </select>
+                    <select id="decision-filter" class="search-input" style="width:140px;" onchange="filterDecisionCards()">
+                        <option value="">All Decisions</option>
+                        <option value="TRADE">✅ Trade</option>
+                        <option value="NO TRADE">❌ No Trade</option>
+                        <option value="SKIP">⏭️ Skip</option>
+                    </select>
+                    <button class="btn btn-export btn-sm" onclick="toggleDecisionExpand()" id="btn-expand-all">Expand All</button>
+                </div>
+            </div>
+            <div id="decision-log-container">
+                <div class="empty-state" style="padding:40px 0;">No decision data yet — run an engine cycle to see how the bot makes decisions.</div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- TAB 4: WHALE TRACKER                                    -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <div class="tab-content" id="tab-whales" data-tab="whales">
+
+        <!-- ─── Whale / Smart Money Tracker ─────────────────────── -->
+        <section class="panel" id="whale-tracker-panel">
+            <div class="panel-header">
+                <h2>🐋 Smart Money Tracker</h2>
+                <div class="panel-tools">
+                    <span class="badge badge-paper" id="whale-last-scan">Last scan: —</span>
+                </div>
+            </div>
+
+            <!-- Whale Summary Cards -->
+            <div class="card-grid" id="whale-summary-cards">
+                <div class="card accent-blue">
+                    <div class="card-label">Tracked Wallets</div>
+                    <div class="card-value" id="whale-total-wallets">0</div>
+                    <div class="card-sub">Top Polymarket traders</div>
+                </div>
+                <div class="card accent-green">
+                    <div class="card-label">Conviction Signals</div>
+                    <div class="card-value" id="whale-total-signals">0</div>
+                    <div class="card-sub" id="whale-strong-signals">Strong: 0</div>
+                </div>
+                <div class="card accent-orange">
+                    <div class="card-label">Recent Entries</div>
+                    <div class="card-value" id="whale-recent-entries">0</div>
+                    <div class="card-sub" id="whale-recent-exits">Exits: 0</div>
+                </div>
+            </div>
+
+            <!-- Conviction Signals Table -->
+            <div class="table-wrap" style="margin-top:16px;">
+                <h3 style="margin:0 0 8px 0;">🎯 Conviction Signals (Multi-Whale Consensus)</h3>
+                <table id="conviction-table">
+                    <thead><tr>
+                        <th>Market</th><th>Outcome</th><th>Whales</th><th>Total $</th>
+                        <th>Avg Entry</th><th>Current</th><th>Score</th><th>Strength</th>
+                        <th>Direction</th><th>Who</th><th>Time</th>
+                    </tr></thead>
+                    <tbody id="conviction-body">
+                        <tr><td colspan="11" class="empty-state">No conviction signals yet — run a wallet scan to populate</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Recent Whale Activity (Deltas) -->
+            <div class="table-wrap" style="margin-top:16px;">
+                <h3 style="margin:0 0 8px 0;">📡 Recent Whale Activity</h3>
+                <table id="whale-deltas-table">
+                    <thead><tr>
+                        <th>Whale</th><th>Action</th><th>Market</th><th>Outcome</th>
+                        <th>Size Δ</th><th>Value Δ</th><th>Price</th><th>Time</th>
+                    </tr></thead>
+                    <tbody id="whale-deltas-body">
+                        <tr><td colspan="8" class="empty-state">No whale activity detected yet</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Tracked Wallets Leaderboard -->
+            <div class="table-wrap" style="margin-top:16px;">
+                <h3 style="margin:0 0 8px 0;">🏆 Tracked Wallets Leaderboard</h3>
+                <table id="tracked-wallets-table">
+                    <thead><tr>
+                        <th>Rank</th><th>Name</th><th>Address</th><th>P&L</th>
+                        <th>Win Rate</th><th>Positions</th><th>Score</th><th>Last Scanned</th>
+                    </tr></thead>
+                    <tbody id="tracked-wallets-body">
+                        <tr><td colspan="8" class="empty-state">No wallets tracked yet</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- TAB 5: SYSTEM                                           -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <div class="tab-content" id="tab-system" data-tab="system">
+
+        <!-- ─── Risk Monitor ────────────────────────────────────── -->
+        <section class="panel">
+            <h2>⚠️ Risk Monitor</h2>
+            <div class="risk-grid" id="risk-grid">
+                <div class="risk-item">
+                    <div class="risk-label">Daily Exposure</div>
+                    <div class="risk-bar-container">
+                        <div class="risk-bar" id="risk-bar-daily" style="width:0%"></div>
+                    </div>
+                    <div class="risk-values">
+                        <span id="risk-daily-current">$0</span> / <span id="risk-daily-limit">$0</span>
+                    </div>
+                </div>
+                <div class="risk-item">
+                    <div class="risk-label">Open Positions</div>
+                    <div class="risk-bar-container">
+                        <div class="risk-bar" id="risk-bar-positions" style="width:0%"></div>
+                    </div>
+                    <div class="risk-values">
+                        <span id="risk-pos-current">0</span> / <span id="risk-pos-limit">0</span>
+                    </div>
+                </div>
+                <div class="risk-item">
+                    <div class="risk-label">Evidence Quality (recent avg)</div>
+                    <div class="risk-bar-container">
+                        <div class="risk-bar bar-inverted" id="risk-bar-eq" style="width:0%"></div>
+                    </div>
+                    <div class="risk-values">
+                        <span id="risk-eq-current">0.00</span> / min <span id="risk-eq-limit">0.00</span>
+                    </div>
+                </div>
+            </div>
+            <div class="risk-params" id="risk-params"></div>
+        </section>
+
+        <!-- ─── Recent Alerts ───────────────────────────────────── -->
+        <section class="panel">
+            <h2>� Recent Alerts</h2>
+            <div class="table-wrap">
+                <table id="alerts-table">
+                    <thead><tr>
+                        <th>Level</th><th>Channel</th><th>Message</th><th>Time</th>
+                    </tr></thead>
+                    <tbody id="alerts-body">
+                        <tr><td colspan="4" class="empty-state">No alerts</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ─── Audit Log ───────────────────────────────────────── -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2>🔒 Audit Trail</h2>
+                <div class="panel-tools">
+                    <input type="text" class="search-input" placeholder="🔍 Filter audit..." oninput="filterTable('audit-body', this.value)">
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table id="audit-table">
+                    <thead><tr>
+                        <th>ID</th><th>Market</th><th>Decision</th><th>Stage</th>
+                        <th>Details</th><th>Integrity</th><th>Time</th>
+                    </tr></thead>
+                    <tbody id="audit-body">
+                        <tr><td colspan="7" class="empty-state">No audit entries</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ─── System Config (Editable) ────────────────────────── -->
+        <section class="panel" id="config-panel">
+            <div class="panel-header">
+                <h2>⚙️ Configuration</h2>
+                <div class="panel-tools">
+                    <button class="btn btn-save" onclick="saveAllConfig()">💾 Save All Changes</button>
+                    <button class="btn btn-muted" onclick="confirmResetConfig()">🔄 Reset Defaults</button>
+                </div>
+            </div>
+            <p class="config-hint">Edit any value below and click <strong>Save All Changes</strong> to persist to config.yaml. Changes take effect immediately.</p>
+            <div class="config-tabs" id="config-tabs"></div>
+            <div class="config-grid" id="config-grid"></div>
+        </section>
+
+    </div>
 
     <!-- ─── Footer ──────────────────────────────────────────── -->
     <footer>
@@ -495,6 +554,6 @@
         <span>Auto-refreshes every 15s</span>
     </footer>
 
-    <script src="/static/dashboard.js?v=10"></script>
+    <script src="/static/dashboard.js?v=11"></script>
 </body>
 </html>

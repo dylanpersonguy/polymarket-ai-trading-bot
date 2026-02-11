@@ -11,6 +11,45 @@ let _charts = {};              // Chart.js instances
 const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
+// ─── Tab Navigation ─────────────────────────────────────────────
+let _activeTab = localStorage.getItem('dashboardTab') || 'overview';
+
+function switchTab(tabName) {
+    _activeTab = tabName;
+    localStorage.setItem('dashboardTab', tabName);
+
+    // Update button states
+    $$('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabName);
+    });
+
+    // Update content visibility
+    $$('.tab-content').forEach(content => {
+        content.classList.toggle('active', content.dataset.tab === tabName);
+    });
+
+    // Scroll to top of content
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Charts need a resize when their container becomes visible
+    requestAnimationFrame(() => {
+        Object.values(_charts).forEach(chart => {
+            if (chart && chart.canvas && chart.canvas.offsetParent !== null) {
+                chart.resize();
+            }
+        });
+    });
+}
+
+// Mapping: which update functions belong to which tab
+const TAB_UPDATERS = {
+    overview: ['updatePortfolio', 'updateCharts', 'updateEquityCurve', 'updateEngineStatus', 'updateDrawdown', 'updateRegime'],
+    trading:  ['updatePositions', 'updateCandidates', 'updateForecasts', 'updateTrades'],
+    analytics: ['updateAnalytics', 'updateDecisionLog'],
+    whales:   ['updateWhaleTracker'],
+    system:   ['updateRisk', 'updateAlerts', 'updateAudit', 'updateConfig'],
+};
+
 // ─── Smart DOM Update (skip if unchanged) ───────────────────────
 function safeHTML(el, html) {
     if (!el) return;
@@ -1793,35 +1832,53 @@ async function updateWhaleTracker() {
 //  REFRESH ORCHESTRATION
 // ═══════════════════════════════════════════════════════════════
 
+// Map of function names to actual functions
+const _updaterFns = {
+    updatePortfolio, updateRisk, updatePositions, updateCandidates,
+    updateDecisionLog, updateForecasts, updateTrades, updateCharts,
+    updateEquityCurve, updateEngineStatus, updateDrawdown, updateAudit,
+    updateAlerts, updateConfig, updateAnalytics, updateRegime, updateWhaleTracker,
+};
+
 async function refreshAll() {
-    const scrollY = window.scrollY;                    // preserve scroll
+    const scrollY = window.scrollY;
 
-    await Promise.all([
-        updatePortfolio(),
-        updateRisk(),
-        updatePositions(),
-        updateCandidates(),
-        updateDecisionLog(),
-        updateForecasts(),
-        updateTrades(),
-        updateCharts(),
-        updateEquityCurve(),
-        updateEngineStatus(),
-        updateDrawdown(),
-        updateAudit(),
-        updateAlerts(),
-        updateConfig(),
-        updateAnalytics(),
-        updateRegime(),
-        updateWhaleTracker(),
-    ]);
+    // Always update portfolio (header badges) and engine status
+    const alwaysUpdate = ['updatePortfolio', 'updateEngineStatus'];
+
+    // Get updaters for the active tab
+    const tabUpdaters = TAB_UPDATERS[_activeTab] || [];
+
+    // Merge, deduplicate
+    const toRun = [...new Set([...alwaysUpdate, ...tabUpdaters])];
+
+    await Promise.all(toRun.map(name => {
+        const fn = _updaterFns[name];
+        return fn ? fn() : Promise.resolve();
+    }));
+
     $('#last-updated-time').textContent = new Date().toLocaleTimeString();
+    requestAnimationFrame(() => window.scrollTo(0, scrollY));
+}
 
-    requestAnimationFrame(() => window.scrollTo(0, scrollY));  // restore scroll
+// Full refresh - runs ALL updaters (used on first load)
+async function refreshFull() {
+    const scrollY = window.scrollY;
+
+    await Promise.all(Object.values(_updaterFns).map(fn => fn()));
+
+    $('#last-updated-time').textContent = new Date().toLocaleTimeString();
+    requestAnimationFrame(() => window.scrollTo(0, scrollY));
 }
 
 // ─── Init ───────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    refreshAll();
+    // Restore saved tab
+    switchTab(_activeTab);
+
+    // Full refresh on first load (populate all tabs)
+    refreshFull();
+
+    // Smart refresh every 15s (only active tab)
     setInterval(refreshAll, 15000);
 });
