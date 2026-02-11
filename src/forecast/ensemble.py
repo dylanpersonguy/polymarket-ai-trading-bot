@@ -27,6 +27,7 @@ from src.forecast.feature_builder import MarketFeatures
 from src.research.evidence_extractor import EvidencePackage
 from src.observability.logger import get_logger
 from src.connectors.rate_limiter import rate_limiter
+from src.observability.metrics import cost_tracker
 
 log = get_logger(__name__)
 
@@ -188,6 +189,7 @@ async def _query_openai(model: str, prompt: str, config: ForecastingConfig) -> M
         )
         raw = resp.choices[0].message.content or "{}"
         parsed = _parse_llm_json(raw)
+        cost_tracker.record_call(model)
         return ModelForecast(
             model_name=model,
             model_probability=max(0.01, min(0.99, float(parsed.get("model_probability", 0.5)))),
@@ -226,6 +228,7 @@ async def _query_anthropic(model: str, prompt: str, config: ForecastingConfig) -
         )
         raw = resp.content[0].text if resp.content else "{}"
         parsed = _parse_llm_json(raw)
+        cost_tracker.record_call(model)
         return ModelForecast(
             model_name=model,
             model_probability=max(0.01, min(0.99, float(parsed.get("model_probability", 0.5)))),
@@ -259,6 +262,7 @@ async def _query_google(model: str, prompt: str, config: ForecastingConfig) -> M
         )
         raw = resp.text or "{}"
         parsed = _parse_llm_json(raw)
+        cost_tracker.record_call(model)
         return ModelForecast(
             model_name=model,
             model_probability=max(0.01, min(0.99, float(parsed.get("model_probability", 0.5)))),
@@ -305,6 +309,11 @@ class EnsembleForecaster:
     def __init__(self, ensemble_config: EnsembleConfig, forecast_config: ForecastingConfig):
         self._ensemble = ensemble_config
         self._forecast = forecast_config
+        self._external_weights: dict[str, float] | None = None
+
+    def set_adaptive_weights(self, weights: dict[str, float]) -> None:
+        """Inject learned per-category weights from AdaptiveModelWeighter."""
+        self._external_weights = weights
 
     async def forecast(
         self,
@@ -350,8 +359,8 @@ class EnsembleForecaster:
             successes = [fallback]
 
         # Aggregate probabilities
-        probs = [f.model_probability for f in successes]
-        agg_prob = self._aggregate(probs)
+        model_probs = [(f.model_name, f.model_probability) for f in successes]
+        agg_prob = self._aggregate(model_probs)
 
         # Aggregate confidence
         conf_order = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
@@ -365,7 +374,8 @@ class EnsembleForecaster:
             agg_confidence = "LOW"
 
         # Model spread = disagreement indicator
-        spread = max(probs) - min(probs) if len(probs) > 1 else 0.0
+        prob_values = [f.model_probability for f in successes]
+        spread = max(prob_values) - min(prob_values) if len(prob_values) > 1 else 0.0
         agreement = max(0.0, 1.0 - spread * 2)  # spread of 0.5 = 0 agreement
 
         # If models disagree strongly, reduce confidence
@@ -409,10 +419,16 @@ class EnsembleForecaster:
         )
         return result
 
-    def _aggregate(self, probs: list[float]) -> float:
-        """Aggregate probabilities using configured method."""
-        if not probs:
+    def _aggregate(self, model_probs: list[tuple[str, float]]) -> float:
+        """Aggregate probabilities using configured method.
+
+        Args:
+            model_probs: List of (model_name, probability) tuples.
+        """
+        if not model_probs:
             return 0.5
+
+        probs = [p for _, p in model_probs]
 
         if len(probs) == 1:
             return probs[0]
@@ -427,12 +443,12 @@ class EnsembleForecaster:
             return sorted_p[mid]
 
         elif method == "weighted":
-            weights = self._ensemble.weights
+            # Use adaptive (learned) weights if available, else config weights
+            weights = self._external_weights or self._ensemble.weights
             total_weight = 0.0
             weighted_sum = 0.0
-            for p in probs:
-                # Can't match back to model easily, use equal weights as fallback
-                w = 1.0 / len(probs)
+            for model_name, p in model_probs:
+                w = weights.get(model_name, 1.0 / len(model_probs))
                 weighted_sum += p * w
                 total_weight += w
             return weighted_sum / total_weight if total_weight > 0 else 0.5

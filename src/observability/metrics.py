@@ -73,3 +73,65 @@ class MetricsCollector:
 
 # Global singleton
 metrics = MetricsCollector()
+
+
+# ── API Cost Tracking ────────────────────────────────────────────────
+
+# Approximate per-call costs (USD) for common APIs
+_DEFAULT_COSTS: dict[str, float] = {
+    "gpt-4o": 0.005,                    # ~$5/1M input tokens, ~1K tokens/call
+    "gpt-4o-mini": 0.0005,
+    "claude-3-5-sonnet-20241022": 0.005,
+    "gemini-1.5-pro": 0.003,
+    "serpapi": 0.005,                    # $50/5K searches
+    "bing": 0.003,
+    "tavily": 0.005,
+}
+
+
+class CostTracker:
+    """Track API costs per cycle and cumulative."""
+
+    def __init__(self, cost_map: dict[str, float] | None = None):
+        self._costs = cost_map or dict(_DEFAULT_COSTS)
+        self._lock = Lock()
+        self._cycle_calls: dict[str, int] = defaultdict(int)
+        self._total_calls: dict[str, int] = defaultdict(int)
+        self._cycle_cost: float = 0.0
+        self._total_cost: float = 0.0
+
+    def record_call(self, api_name: str, count: int = 1) -> None:
+        """Record an API call and its estimated cost."""
+        cost_per_call = self._costs.get(api_name, 0.001)
+        with self._lock:
+            self._cycle_calls[api_name] += count
+            self._total_calls[api_name] += count
+            self._cycle_cost += cost_per_call * count
+            self._total_cost += cost_per_call * count
+
+    def end_cycle(self) -> dict[str, Any]:
+        """End the current cycle and return cost summary. Resets cycle counters."""
+        with self._lock:
+            summary = {
+                "cycle_cost_usd": round(self._cycle_cost, 4),
+                "cycle_calls": dict(self._cycle_calls),
+                "total_cost_usd": round(self._total_cost, 4),
+                "total_calls": dict(self._total_calls),
+            }
+            self._cycle_calls = defaultdict(int)
+            self._cycle_cost = 0.0
+            return summary
+
+    def snapshot(self) -> dict[str, Any]:
+        """Return current cost state without resetting."""
+        with self._lock:
+            return {
+                "cycle_cost_usd": round(self._cycle_cost, 4),
+                "cycle_calls": dict(self._cycle_calls),
+                "total_cost_usd": round(self._total_cost, 4),
+                "total_calls": dict(self._total_calls),
+            }
+
+
+# Global cost tracker singleton
+cost_tracker = CostTracker()

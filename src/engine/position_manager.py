@@ -24,10 +24,11 @@ log = get_logger(__name__)
 class ExitSignal:
     """Signal to exit a position."""
     market_id: str
-    reason: str  # "stop_loss" | "take_profit" | "time_exit" | "edge_reversal" | "kill_switch"
+    reason: str  # "stop_loss" | "trailing_stop" | "take_profit" | "time_exit" | "edge_reversal" | "kill_switch" | "partial_exit" | "market_resolved"
     urgency: str  # "immediate" | "soon" | "optional"
     current_pnl_pct: float
     details: str
+    exit_fraction: float = 1.0  # 1.0 = full exit, 0.5 = partial exit
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__
@@ -92,19 +93,38 @@ class PositionRecord:
 
 
 class PositionManager:
-    """Track and manage all open positions."""
+    """Track and manage all open positions.
+
+    Exit strategies:
+      1. Dynamic stop-loss (based on confidence/edge magnitude)
+      2. Trailing stop-loss (locks in gains when position is profitable)
+      3. Take profit at resolution (100%)
+      4. Time-based exit (optional, disabled by default)
+      5. Edge reversal (model prob flips against position)
+      6. Kill switch (drawdown circuit breaker)
+      7. Partial exit (scale out when edge narrows)
+      8. Resolution detection (auto-close when market resolves)
+    """
 
     def __init__(
         self,
         stop_loss_pct: float = 0.20,
         take_profit_pct: float = 1.0,  # Hold to resolution (100%)
         exit_before_hours: float = 0.0,  # Disabled — hold through resolution
+        trailing_stop_activation_pct: float = 0.10,
+        trailing_stop_distance_pct: float = 0.08,
+        partial_exit_threshold: float = 0.50,
+        partial_exit_fraction: float = 0.50,
     ):
         self.positions: dict[str, PositionRecord] = {}
         self.closed_positions: list[PositionRecord] = []
         self.stop_loss_pct = stop_loss_pct
         self.take_profit_pct = take_profit_pct
         self.exit_before_hours = exit_before_hours
+        self.trailing_stop_activation_pct = trailing_stop_activation_pct
+        self.trailing_stop_distance_pct = trailing_stop_distance_pct
+        self.partial_exit_threshold = partial_exit_threshold
+        self.partial_exit_fraction = partial_exit_fraction
 
     def open_position(
         self,
@@ -119,15 +139,24 @@ class PositionManager:
         edge: float = 0.0,
         confidence: str = "LOW",
     ) -> PositionRecord:
-        """Record a new position."""
+        """Record a new position with dynamic stop-loss based on confidence/edge."""
+        # Dynamic stop-loss: tighter for low-confidence, wider for high-confidence
+        confidence_multiplier = {"HIGH": 1.3, "MEDIUM": 1.0, "LOW": 0.7}.get(
+            confidence, 0.7
+        )
+        # Higher edge = wider stop (more room to breathe)
+        edge_multiplier = min(1.5, max(0.6, 1.0 + abs(edge) * 2))
+        dynamic_stop_pct = self.stop_loss_pct * confidence_multiplier * edge_multiplier
+        dynamic_stop_pct = max(0.08, min(0.35, dynamic_stop_pct))  # clamp 8%-35%
+
         # Calculate stop-loss and take-profit prices
         # TP strategy: hold to resolution — only take profit at $1.00 (YES) / $0.00 (NO)
         if side == "YES":
-            stop_price = max(0.01, entry_price * (1 - self.stop_loss_pct))
+            stop_price = max(0.01, entry_price * (1 - dynamic_stop_pct))
             tp_price = 0.99  # Sell at 100% — resolution price for YES
         else:
             # For NO positions, direction is inverted
-            stop_price = min(0.99, entry_price * (1 + self.stop_loss_pct))
+            stop_price = min(0.99, entry_price * (1 + dynamic_stop_pct))
             tp_price = 0.01  # Sell at 100% — resolution price for NO
 
         pos = PositionRecord(
@@ -189,6 +218,7 @@ class PositionManager:
         hours_to_resolution: dict[str, float] | None = None,
         model_probs: dict[str, float] | None = None,
         force_exit_all: bool = False,
+        resolved_markets: dict[str, float] | None = None,
     ) -> list[ExitSignal]:
         """Check all positions for exit conditions.
 
@@ -196,6 +226,7 @@ class PositionManager:
             hours_to_resolution: market_id -> hours until resolution
             model_probs: market_id -> current model probability
             force_exit_all: if True (kill switch), exit everything
+            resolved_markets: market_id -> resolution price (1.0 or 0.0)
         """
         signals: list[ExitSignal] = []
 
@@ -214,29 +245,67 @@ class PositionManager:
                 ))
                 continue
 
-            # Stop-loss
-            if pos.side == "YES" and pos.current_price <= pos.stop_loss_price:
+            # Resolution detection — market has resolved
+            if resolved_markets and market_id in resolved_markets:
                 signals.append(ExitSignal(
                     market_id=market_id,
-                    reason="stop_loss",
+                    reason="market_resolved",
                     urgency="immediate",
                     current_pnl_pct=pos.pnl_pct,
                     details=(
-                        f"Price {pos.current_price:.3f} <= "
-                        f"stop {pos.stop_loss_price:.3f}"
+                        f"Market resolved at {resolved_markets[market_id]:.2f}"
                     ),
                 ))
-            elif pos.side == "NO" and pos.current_price >= pos.stop_loss_price:
-                signals.append(ExitSignal(
-                    market_id=market_id,
-                    reason="stop_loss",
-                    urgency="immediate",
-                    current_pnl_pct=pos.pnl_pct,
-                    details=(
-                        f"Price {pos.current_price:.3f} >= "
-                        f"stop {pos.stop_loss_price:.3f}"
-                    ),
-                ))
+                continue
+
+            # Trailing stop-loss — if position has been profitable enough
+            trailing_triggered = False
+            if pos.max_unrealised_pnl > 0 and pos.size_usd > 0:
+                max_return_pct = pos.max_unrealised_pnl / pos.size_usd
+                if max_return_pct >= self.trailing_stop_activation_pct:
+                    # Trailing stop: exit if price dropped trailing_stop_distance_pct
+                    # from high water mark
+                    drawdown_from_peak = (
+                        pos.max_unrealised_pnl - pos.unrealised_pnl
+                    ) / pos.size_usd
+                    if drawdown_from_peak >= self.trailing_stop_distance_pct:
+                        signals.append(ExitSignal(
+                            market_id=market_id,
+                            reason="trailing_stop",
+                            urgency="immediate",
+                            current_pnl_pct=pos.pnl_pct,
+                            details=(
+                                f"Trailing stop: peak PnL ${pos.max_unrealised_pnl:.2f}, "
+                                f"current ${pos.unrealised_pnl:.2f}, "
+                                f"drawdown {drawdown_from_peak:.1%}"
+                            ),
+                        ))
+                        trailing_triggered = True
+
+            # Static stop-loss (only if trailing stop didn't trigger)
+            if not trailing_triggered:
+                if pos.side == "YES" and pos.current_price <= pos.stop_loss_price:
+                    signals.append(ExitSignal(
+                        market_id=market_id,
+                        reason="stop_loss",
+                        urgency="immediate",
+                        current_pnl_pct=pos.pnl_pct,
+                        details=(
+                            f"Price {pos.current_price:.3f} <= "
+                            f"stop {pos.stop_loss_price:.3f}"
+                        ),
+                    ))
+                elif pos.side == "NO" and pos.current_price >= pos.stop_loss_price:
+                    signals.append(ExitSignal(
+                        market_id=market_id,
+                        reason="stop_loss",
+                        urgency="immediate",
+                        current_pnl_pct=pos.pnl_pct,
+                        details=(
+                            f"Price {pos.current_price:.3f} >= "
+                            f"stop {pos.stop_loss_price:.3f}"
+                        ),
+                    ))
 
             # Take-profit: hold to resolution — only sell at 100% ($1.00 / $0.00)
             if pos.side == "YES" and pos.current_price >= pos.take_profit_price:
@@ -274,7 +343,28 @@ class PositionManager:
                         details=f"Only {hrs:.1f}h to resolution",
                     ))
 
-            # Edge reversal
+            # Partial exit — edge has narrowed significantly
+            if model_probs and market_id in model_probs:
+                new_prob = model_probs[market_id]
+                current_edge = abs(new_prob - pos.current_price)
+                entry_edge = abs(pos.entry_edge)
+                if (entry_edge > 0.01
+                        and current_edge < entry_edge * self.partial_exit_threshold
+                        and pos.unrealised_pnl > 0):
+                    signals.append(ExitSignal(
+                        market_id=market_id,
+                        reason="partial_exit",
+                        urgency="soon",
+                        current_pnl_pct=pos.pnl_pct,
+                        details=(
+                            f"Edge narrowed from {entry_edge:.3f} to "
+                            f"{current_edge:.3f} ({current_edge/entry_edge:.0%} "
+                            f"of entry), exit {self.partial_exit_fraction:.0%}"
+                        ),
+                        exit_fraction=self.partial_exit_fraction,
+                    ))
+
+            # Full edge reversal
             if model_probs and market_id in model_probs:
                 new_prob = model_probs[market_id]
                 if pos.side == "YES" and new_prob < pos.entry_price * 0.9:

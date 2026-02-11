@@ -21,6 +21,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.observability.logger import get_logger
 from src.connectors.rate_limiter import rate_limiter
+from src.observability.metrics import cost_tracker
 
 log = get_logger(__name__)
 
@@ -124,6 +125,7 @@ class SerpAPIProvider(SearchProvider):
                 )
             )
         log.info("serpapi.search", query=query[:80], results=len(results))
+        cost_tracker.record_call("serpapi")
         return results
 
 
@@ -163,6 +165,7 @@ class BingProvider(SearchProvider):
                 )
             )
         log.info("bing.search", query=query[:80], results=len(results))
+        cost_tracker.record_call("bing")
         return results
 
 
@@ -210,6 +213,7 @@ class TavilyProvider(SearchProvider):
                 )
             )
         log.info("tavily.search", query=query[:80], results=len(results))
+        cost_tracker.record_call("tavily")
         return results
 
 
@@ -222,11 +226,64 @@ _PROVIDERS: dict[str, type[SearchProvider]] = {
 }
 
 
+class FallbackSearchProvider(SearchProvider):
+    """Search provider that tries multiple backends in order.
+
+    If the primary provider fails (429, timeout, auth error), it
+    automatically falls through to the next available provider.
+    Default chain: serpapi → bing → tavily.
+    """
+
+    def __init__(self, chain: list[str] | None = None):
+        if chain is None:
+            chain = ["serpapi", "bing", "tavily"]
+        self._chain: list[SearchProvider] = []
+        for name in chain:
+            cls = _PROVIDERS.get(name.lower())
+            if cls:
+                self._chain.append(cls())
+        if not self._chain:
+            self._chain.append(SerpAPIProvider())
+
+    async def close(self) -> None:
+        for provider in self._chain:
+            await provider.close()
+
+    async def search(self, query: str, num_results: int = 10) -> list[SearchResult]:
+        last_error: Exception | None = None
+        for i, provider in enumerate(self._chain):
+            try:
+                results = await provider.search(query, num_results)
+                if results:
+                    return results
+            except Exception as e:
+                provider_name = type(provider).__name__
+                log.warning(
+                    "search.fallback",
+                    provider=provider_name,
+                    error=str(e),
+                    next_provider=(
+                        type(self._chain[i + 1]).__name__
+                        if i + 1 < len(self._chain) else "none"
+                    ),
+                )
+                last_error = e
+                continue
+        if last_error:
+            log.error("search.all_providers_failed", error=str(last_error))
+        return []
+
+
 def create_search_provider(name: str = "serpapi") -> SearchProvider:
-    """Create a search provider by name."""
+    """Create a search provider by name.
+
+    Use "fallback" for automatic fallback chain (serpapi → bing → tavily).
+    """
+    if name.lower() == "fallback":
+        return FallbackSearchProvider()
     cls = _PROVIDERS.get(name.lower())
     if cls is None:
         raise ValueError(
-            f"Unknown search provider: {name!r}. Choose from: {list(_PROVIDERS)}"
+            f"Unknown search provider: {name!r}. Choose from: {list(_PROVIDERS) + ['fallback']}"
         )
     return cls()

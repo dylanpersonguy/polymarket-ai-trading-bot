@@ -37,7 +37,9 @@ from src.analytics.calibration_feedback import CalibrationFeedbackLoop
 from src.analytics.adaptive_weights import AdaptiveModelWeighter
 from src.analytics.smart_entry import SmartEntryCalculator
 from src.analytics.wallet_scanner import WalletScanner, save_scan_result
+from src.connectors.ws_feed import WebSocketFeed, PriceTick
 from src.observability.logger import get_logger
+from src.observability.metrics import cost_tracker
 
 log = get_logger(__name__)
 
@@ -59,6 +61,27 @@ class CycleResult:
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__
+
+
+@dataclass
+class PipelineContext:
+    """Carries state through the processing pipeline stages."""
+    market: Any
+    cycle_id: int
+    market_id: str = ""
+    question: str = ""
+    classification: Any = None
+    sources: list[Any] = field(default_factory=list)
+    evidence: Any = None
+    features: Any = None
+    forecast: Any = None
+    edge_result: Any = None
+    has_edge: bool = False
+    risk_result: Any = None
+    position: Any = None
+    result: dict[str, Any] = field(default_factory=lambda: {
+        "has_edge": False, "trade_attempted": False, "trade_executed": False,
+    })
 
 
 class TradingEngine:
@@ -98,6 +121,15 @@ class TradingEngine:
         )
         self._last_wallet_scan: float = 0.0
         self._latest_scan_result: Any = None
+
+        # ── WebSocket price feed ──
+        self._ws_feed = WebSocketFeed()
+        self._ws_task: asyncio.Task[None] | None = None
+
+        # ── Rebalance / Arbitrage tracking ──
+        self._last_rebalance_check: float = 0.0
+        self._last_arbitrage_scan: float = 0.0
+        self._latest_arb_opportunities: list[Any] = []
 
         # Database (initialised in start())
         self._db: Any = None
@@ -179,6 +211,13 @@ class TradingEngine:
             except NotImplementedError:
                 pass  # Windows doesn't support add_signal_handler
 
+        # Start WebSocket price feed in background
+        try:
+            self._ws_task = asyncio.create_task(self._ws_feed.start())
+            log.info("engine.ws_feed_started")
+        except Exception as e:
+            log.warning("engine.ws_feed_start_error", error=str(e))
+
         while self._running:
             try:
                 await self._run_cycle()
@@ -200,6 +239,9 @@ class TradingEngine:
     def stop(self) -> None:
         log.info("engine.stop_requested")
         self._running = False
+        # Stop WebSocket feed
+        if self._ws_task and not self._ws_task.done():
+            asyncio.ensure_future(self._ws_feed.stop())
 
     def _handle_signal(self, sig: signal.Signals) -> None:
         """Handle SIGTERM/SIGINT for graceful shutdown."""
@@ -323,7 +365,9 @@ class TradingEngine:
                     traceback.print_exc()
 
             await self._check_positions()
+            await self._maybe_rebalance()
             await self._maybe_scan_wallets()
+            await self._maybe_scan_arbitrage(markets)
             cycle.status = "completed"
 
         except Exception as e:
@@ -350,6 +394,9 @@ class TradingEngine:
         if len(self._cycle_history) > 100:
             self._cycle_history = self._cycle_history[-50:]
 
+        # Collect API cost summary for this cycle
+        cycle_costs = cost_tracker.end_cycle()
+
         log.info(
             "engine.cycle_complete",
             cycle_id=cycle.cycle_id,
@@ -359,6 +406,8 @@ class TradingEngine:
             edges=cycle.edges_found,
             trades=cycle.trades_executed,
             status=cycle.status,
+            cycle_cost_usd=cycle_costs["cycle_cost_usd"],
+            total_cost_usd=cycle_costs["total_cost_usd"],
         )
         if self._db:
             self._db.insert_alert(
@@ -397,26 +446,98 @@ class TradingEngine:
     # ── Full Pipeline ────────────────────────────────────────────────
 
     async def _process_candidate(self, market: Any, cycle_id: int) -> dict[str, Any]:
-        """Process a single market through the full research-to-trade pipeline."""
-        result = {"has_edge": False, "trade_attempted": False, "trade_executed": False}
-        market_id = market.id
-        question = market.question
+        """Process a single market through the full research-to-trade pipeline.
+
+        Orchestrates stages via PipelineContext and dedicated stage methods.
+        """
+        ctx = PipelineContext(market=market, cycle_id=cycle_id,
+                              market_id=market.id, question=market.question)
 
         # ── Stage 0: Classification ──────────────────────────────────
-        from src.engine.market_classifier import classify_and_log
-        classification = classify_and_log(market)
-
-        log.info(
-            "engine.pipeline_start",
-            market_id=market_id,
-            question=question[:80],
-            market_type=market.market_type,
-            category=classification.category,
-            subcategory=classification.subcategory,
-            researchability=classification.researchability,
-        )
+        self._stage_classify(ctx)
 
         # ── Stage 1: Research ────────────────────────────────────────
+        ok = await self._stage_research(ctx)
+        if not ok:
+            return ctx.result
+
+        # ── Stage 2: Build Features ──────────────────────────────────
+        from src.forecast.feature_builder import build_features
+        ctx.features = build_features(market=market, evidence=ctx.evidence)
+
+        # ── Stage 3: Forecast ────────────────────────────────────────
+        await self._stage_forecast(ctx)
+
+        # ── Stage 3b: Apply Calibration ──────────────────────────────
+        self._stage_calibrate(ctx)
+
+        # ── Stage 4: Edge Calculation + Whale Adjustment ─────────────
+        self._stage_edge_calc(ctx)
+        ctx.result["has_edge"] = ctx.has_edge
+
+        # ── Stage 5: Risk Checks ─────────────────────────────────────
+        self._stage_risk_checks(ctx)
+
+        # ── Persist forecast to DB ───────────────────────────────────
+        self._stage_persist_forecast(ctx)
+
+        # ── Portfolio Correlation Check ──────────────────────────────
+        self._stage_correlation_check(ctx)
+
+        # ── Decision Gate ────────────────────────────────────────────
+        if not ctx.risk_result.allowed:
+            log.info("engine.no_trade", market_id=ctx.market_id,
+                     violations=ctx.risk_result.violations)
+            self._log_candidate(
+                cycle_id, market, forecast=ctx.forecast, evidence=ctx.evidence,
+                edge_result=ctx.edge_result, decision="NO TRADE",
+                reason="; ".join(ctx.risk_result.violations),
+            )
+            if self._audit:
+                self._audit.record_trade_decision(
+                    market_id=ctx.market_id, question=ctx.question,
+                    model_prob=ctx.forecast.model_probability,
+                    implied_prob=ctx.forecast.implied_probability,
+                    edge=ctx.forecast.edge,
+                    confidence=ctx.forecast.confidence_level,
+                    risk_result=ctx.risk_result.to_dict(), position_size=0.0,
+                    evidence_summary=ctx.evidence.summary[:200],
+                )
+            return ctx.result
+
+        # ── Stage 6: Position Sizing ─────────────────────────────────
+        self._stage_position_sizing(ctx)
+        if ctx.position is None:
+            return ctx.result
+
+        ctx.result["trade_attempted"] = True
+
+        # ── Stage 7: Build & Route Order ─────────────────────────────
+        await self._stage_execute_order(ctx)
+
+        # ── Stage 8: Audit + Log ─────────────────────────────────────
+        self._stage_audit_and_log(ctx)
+
+        return ctx.result
+
+    # ── Pipeline Stage Methods ────────────────────────────────────────
+
+    def _stage_classify(self, ctx: PipelineContext) -> None:
+        """Stage 0: Classify the market."""
+        from src.engine.market_classifier import classify_and_log
+        ctx.classification = classify_and_log(ctx.market)
+        log.info(
+            "engine.pipeline_start",
+            market_id=ctx.market_id,
+            question=ctx.question[:80],
+            market_type=ctx.market.market_type,
+            category=ctx.classification.category,
+            subcategory=ctx.classification.subcategory,
+            researchability=ctx.classification.researchability,
+        )
+
+    async def _stage_research(self, ctx: PipelineContext) -> bool:
+        """Stage 1: Research. Returns False if research failed and pipeline should abort."""
         from src.research.query_builder import build_queries
         from src.research.source_fetcher import SourceFetcher
         from src.research.evidence_extractor import EvidenceExtractor
@@ -426,67 +547,82 @@ class TradingEngine:
         source_fetcher = SourceFetcher(search_provider, self.config.research)
 
         try:
-            # Adaptive query budget from classifier — pass category + researchability
-            max_q = classification.recommended_queries
+            max_q = ctx.classification.recommended_queries
             queries = build_queries(
-                market, max_queries=max_q,
-                category=classification.category,
-                researchability=classification.researchability,
+                ctx.market, max_queries=max_q,
+                category=ctx.classification.category,
+                researchability=ctx.classification.researchability,
             )
-            sources = await source_fetcher.fetch_sources(
-                queries, market_type=classification.category or market.market_type,
+            ctx.sources = await source_fetcher.fetch_sources(
+                queries,
+                market_type=ctx.classification.category or ctx.market.market_type,
                 max_sources=self.config.research.max_sources,
             )
             extractor = EvidenceExtractor(self.config.forecasting)
-            evidence = await extractor.extract(
-                market_id=market_id, question=question,
-                sources=sources, market_type=market.market_type,
+            ctx.evidence = await extractor.extract(
+                market_id=ctx.market_id, question=ctx.question,
+                sources=ctx.sources, market_type=ctx.market.market_type,
             )
         except Exception as e:
-            log.error("engine.research_failed", market_id=market_id, error=str(e))
-            self._log_candidate(cycle_id, market, decision="SKIP",
+            log.error("engine.research_failed", market_id=ctx.market_id, error=str(e))
+            self._log_candidate(ctx.cycle_id, ctx.market, decision="SKIP",
                                 reason=f"Research failed: {e}")
-            return result
+            return False
         finally:
             await source_fetcher.close()
             await search_provider.close()
 
         log.info(
-            "engine.research_done", market_id=market_id,
-            sources=len(sources), bullets=len(evidence.bullets),
-            quality=round(evidence.quality_score, 3),
+            "engine.research_done", market_id=ctx.market_id,
+            sources=len(ctx.sources), bullets=len(ctx.evidence.bullets),
+            quality=round(ctx.evidence.quality_score, 3),
         )
+        return True
 
-        # ── Stage 2: Build Features ──────────────────────────────────
-        from src.forecast.feature_builder import build_features
-        features = build_features(market=market, evidence=evidence)
-
-        # ── Stage 3: Forecast ────────────────────────────────────────
-        # Use ensemble forecaster when enabled, otherwise single-model
+    async def _stage_forecast(self, ctx: PipelineContext) -> None:
+        """Stage 3: Run ensemble or single-model forecast."""
         if self.config.ensemble.enabled:
             from src.forecast.ensemble import EnsembleForecaster
             ens_forecaster = EnsembleForecaster(
                 self.config.ensemble, self.config.forecasting,
             )
+            # Inject learned adaptive weights if available
+            try:
+                if self._db:
+                    cat = ctx.classification.category if ctx.classification else "UNKNOWN"
+                    adaptive_result = self._adaptive_weighter.get_weights(
+                        self._db.conn, cat,
+                    )
+                    if adaptive_result.data_available:
+                        ens_forecaster.set_adaptive_weights(adaptive_result.weights)
+                        log.info(
+                            "engine.adaptive_weights_injected",
+                            category=cat,
+                            blend=round(adaptive_result.blend_factor, 3),
+                            weights={k: round(v, 3)
+                                     for k, v in adaptive_result.weights.items()},
+                        )
+            except Exception as e:
+                log.warning("engine.adaptive_weights_inject_error", error=str(e))
+
             ens_result = await ens_forecaster.forecast(
-                features=features, evidence=evidence,
+                features=ctx.features, evidence=ctx.evidence,
             )
-            # Adapt EnsembleResult into ForecastResult-like interface
             from src.forecast.llm_forecaster import ForecastResult
-            forecast = ForecastResult(
-                market_id=market_id,
-                question=question,
-                market_type=market.market_type,
-                resolution_source=market.resolution_source,
-                implied_probability=features.implied_probability,
+            ctx.forecast = ForecastResult(
+                market_id=ctx.market_id,
+                question=ctx.question,
+                market_type=ctx.market.market_type,
+                resolution_source=ctx.market.resolution_source,
+                implied_probability=ctx.features.implied_probability,
                 model_probability=ens_result.model_probability,
-                edge=ens_result.model_probability - features.implied_probability,
+                edge=ens_result.model_probability - ctx.features.implied_probability,
                 confidence_level=ens_result.confidence_level,
                 evidence=ens_result.key_evidence,
                 invalidation_triggers=ens_result.invalidation_triggers,
                 reasoning=ens_result.reasoning,
-                evidence_quality=evidence.quality_score,
-                num_sources=evidence.num_sources,
+                evidence_quality=ctx.evidence.quality_score,
+                num_sources=ctx.evidence.num_sources,
                 raw_llm_response={
                     "ensemble": True,
                     "models_succeeded": ens_result.models_succeeded,
@@ -496,166 +632,188 @@ class TradingEngine:
                     "aggregation": ens_result.aggregation_method,
                 },
             )
-            # Apply low-evidence penalty (same logic as LLMForecaster)
-            if evidence.quality_score < self.config.forecasting.min_evidence_quality:
+            # Apply low-evidence penalty
+            if ctx.evidence.quality_score < self.config.forecasting.min_evidence_quality:
                 penalty = self.config.forecasting.low_evidence_penalty
-                old_prob = forecast.model_probability
-                forecast.model_probability = old_prob * (1 - penalty) + 0.5 * penalty
-                forecast.edge = forecast.model_probability - features.implied_probability
+                old_prob = ctx.forecast.model_probability
+                ctx.forecast.model_probability = old_prob * (1 - penalty) + 0.5 * penalty
+                ctx.forecast.edge = ctx.forecast.model_probability - ctx.features.implied_probability
                 log.info("engine.ensemble_low_evidence_penalty",
                          original=round(old_prob, 3),
-                         adjusted=round(forecast.model_probability, 3))
+                         adjusted=round(ctx.forecast.model_probability, 3))
         else:
             from src.forecast.llm_forecaster import LLMForecaster
             forecaster = LLMForecaster(self.config.forecasting)
-            forecast = await forecaster.forecast(
-                features=features, evidence=evidence,
-                resolution_source=market.resolution_source,
+            ctx.forecast = await forecaster.forecast(
+                features=ctx.features, evidence=ctx.evidence,
+                resolution_source=ctx.market.resolution_source,
             )
 
-        # ── Adaptive model weights (learn per-category accuracy) ─────
-        adaptive_result = None
-        try:
-            if self._db:
-                cat = classification.category if classification else "UNKNOWN"
-                adaptive_result = self._adaptive_weighter.get_weights(
-                    self._db.conn, cat,
-                )
-                if adaptive_result.data_available:
-                    log.info(
-                        "engine.adaptive_weights",
-                        category=cat,
-                        blend=round(adaptive_result.blend_factor, 3),
-                        weights={k: round(v, 3)
-                                 for k, v in adaptive_result.weights.items()},
-                    )
-        except Exception as e:
-            log.warning("engine.adaptive_weights_error", error=str(e))
-
         log.info(
-            "engine.forecast_done", market_id=market_id,
-            implied=round(forecast.implied_probability, 3),
-            model=round(forecast.model_probability, 3),
-            edge=round(forecast.edge, 3),
-            confidence=forecast.confidence_level,
+            "engine.forecast_done", market_id=ctx.market_id,
+            implied=round(ctx.forecast.implied_probability, 3),
+            model=round(ctx.forecast.model_probability, 3),
+            edge=round(ctx.forecast.edge, 3),
+            confidence=ctx.forecast.confidence_level,
         )
 
-        # ── Stage 4: Edge Calculation ────────────────────────────────
+    def _stage_calibrate(self, ctx: PipelineContext) -> None:
+        """Stage 3b: Apply probability calibration."""
+        try:
+            from src.forecast.calibrator import calibrate as apply_calibration
+            ensemble_spread = 0.0
+            if hasattr(ctx.forecast, "raw_llm_response") and isinstance(ctx.forecast.raw_llm_response, dict):
+                ensemble_spread = ctx.forecast.raw_llm_response.get("spread", 0.0)
+            cal_result = apply_calibration(
+                raw_prob=ctx.forecast.model_probability,
+                evidence_quality=ctx.evidence.quality_score,
+                num_contradictions=(
+                    len(ctx.evidence.contradictions)
+                    if hasattr(ctx.evidence, "contradictions") else 0
+                ),
+                method=self.config.forecasting.calibration_method,
+                low_evidence_penalty=self.config.forecasting.low_evidence_penalty,
+                ensemble_spread=ensemble_spread,
+            )
+            if abs(cal_result.calibrated_probability - ctx.forecast.model_probability) > 0.005:
+                log.info(
+                    "engine.calibration_applied",
+                    market_id=ctx.market_id,
+                    raw=round(ctx.forecast.model_probability, 4),
+                    calibrated=round(cal_result.calibrated_probability, 4),
+                    adjustments=cal_result.adjustments,
+                )
+                ctx.forecast.model_probability = cal_result.calibrated_probability
+                ctx.forecast.edge = ctx.forecast.model_probability - ctx.forecast.implied_probability
+        except Exception as e:
+            log.warning("engine.calibration_apply_error", error=str(e))
+
+    def _stage_edge_calc(self, ctx: PipelineContext) -> None:
+        """Stage 4: Edge calculation + whale/smart-money adjustment."""
         from src.policy.edge_calc import calculate_edge
-        edge_result = calculate_edge(
-            implied_prob=forecast.implied_probability,
-            model_prob=forecast.model_probability,
+        ctx.edge_result = calculate_edge(
+            implied_prob=ctx.forecast.implied_probability,
+            model_prob=ctx.forecast.model_probability,
             transaction_fee_pct=self.config.risk.transaction_fee_pct,
             gas_cost_usd=self.config.risk.gas_cost_usd,
         )
 
-        # ── Stage 4b: Whale / Smart-Money Edge Adjustment ───────────
+        # Whale / Smart-Money Edge Adjustment
         if (self.config.wallet_scanner.enabled
                 and self._latest_scan_result
                 and hasattr(self._latest_scan_result, "conviction_signals")):
             whale_cfg = self.config.wallet_scanner
             for sig in self._latest_scan_result.conviction_signals:
-                if getattr(sig, "market_id", None) != market_id:
+                if getattr(sig, "market_id", None) != ctx.market_id:
                     continue
                 whale_agrees = (
-                    (sig.direction == "BUY" and edge_result.direction == "BUY_YES")
-                    or (sig.direction == "SELL" and edge_result.direction == "BUY_NO")
+                    (sig.direction == "BUY" and ctx.edge_result.direction == "BUY_YES")
+                    or (sig.direction == "SELL" and ctx.edge_result.direction == "BUY_NO")
                 )
                 if whale_agrees:
                     boost = whale_cfg.conviction_edge_boost
-                    edge_result = calculate_edge(
-                        implied_prob=forecast.implied_probability,
-                        model_prob=min(0.99, forecast.model_probability + boost)
-                        if edge_result.direction == "BUY_YES"
-                        else forecast.model_probability,
+                    ctx.edge_result = calculate_edge(
+                        implied_prob=ctx.forecast.implied_probability,
+                        model_prob=(
+                            min(0.99, ctx.forecast.model_probability + boost)
+                            if ctx.edge_result.direction == "BUY_YES"
+                            else ctx.forecast.model_probability
+                        ),
                         transaction_fee_pct=self.config.risk.transaction_fee_pct,
                         gas_cost_usd=self.config.risk.gas_cost_usd,
                     )
-                    log.info("engine.whale_edge_boost", market_id=market_id,
-                             boost=boost, new_edge=round(edge_result.abs_net_edge, 4))
+                    log.info("engine.whale_edge_boost", market_id=ctx.market_id,
+                             boost=boost, new_edge=round(ctx.edge_result.abs_net_edge, 4))
                 else:
                     penalty = whale_cfg.conviction_edge_penalty
-                    edge_result = calculate_edge(
-                        implied_prob=forecast.implied_probability,
-                        model_prob=max(0.01, forecast.model_probability - penalty)
-                        if edge_result.direction == "BUY_YES"
-                        else min(0.99, forecast.model_probability + penalty),
+                    ctx.edge_result = calculate_edge(
+                        implied_prob=ctx.forecast.implied_probability,
+                        model_prob=(
+                            max(0.01, ctx.forecast.model_probability - penalty)
+                            if ctx.edge_result.direction == "BUY_YES"
+                            else min(0.99, ctx.forecast.model_probability + penalty)
+                        ),
                         transaction_fee_pct=self.config.risk.transaction_fee_pct,
                         gas_cost_usd=self.config.risk.gas_cost_usd,
                     )
-                    log.info("engine.whale_edge_penalty", market_id=market_id,
-                             penalty=penalty, new_edge=round(edge_result.abs_net_edge, 4))
+                    log.info("engine.whale_edge_penalty", market_id=ctx.market_id,
+                             penalty=penalty, new_edge=round(ctx.edge_result.abs_net_edge, 4))
                 break  # only apply first matching signal
 
-        has_edge = edge_result.is_positive and edge_result.abs_net_edge >= self.config.risk.min_edge
-        result["has_edge"] = has_edge
+        ctx.has_edge = (
+            ctx.edge_result.is_positive
+            and ctx.edge_result.abs_net_edge >= self.config.risk.min_edge
+        )
 
-        # ── Stage 5: Risk Checks ─────────────────────────────────────
+    def _stage_risk_checks(self, ctx: PipelineContext) -> None:
+        """Stage 5: Risk limit checks."""
         from src.policy.risk_limits import check_risk_limits
         daily_pnl = self._db.get_daily_pnl() if self._db else 0.0
         open_positions = self._db.get_open_positions_count() if self._db else 0
-        risk_result = check_risk_limits(
-            edge=edge_result, features=features,
+        ctx.risk_result = check_risk_limits(
+            edge=ctx.edge_result, features=ctx.features,
             risk_config=self.config.risk,
             forecast_config=self.config.forecasting,
             current_open_positions=open_positions,
             daily_pnl=daily_pnl,
-            market_type=market.market_type,
+            market_type=ctx.market.market_type,
             allowed_types=self.config.scanning.preferred_types or None,
             restricted_types=self.config.scanning.restricted_types or None,
             drawdown_state=self.drawdown.state,
         )
 
-        # ── Persist forecast to DB ───────────────────────────────────
-        if self._db:
-            from src.storage.models import ForecastRecord, MarketRecord
-            self._db.upsert_market(MarketRecord(
-                id=market_id, condition_id=market.condition_id,
-                question=question, market_type=market.market_type,
-                category=market.category, volume=market.volume,
-                liquidity=market.liquidity,
-                end_date=market.end_date.isoformat() if market.end_date else "",
-                resolution_source=market.resolution_source,
-            ))
-            self._db.insert_forecast(ForecastRecord(
-                id=str(uuid.uuid4()), market_id=market_id,
-                question=question, market_type=market.market_type,
-                implied_probability=forecast.implied_probability,
-                model_probability=forecast.model_probability,
-                edge=forecast.edge,
-                confidence_level=forecast.confidence_level,
-                evidence_quality=evidence.quality_score,
-                num_sources=evidence.num_sources,
-                decision=risk_result.decision,
-                reasoning=forecast.reasoning[:500],
-                evidence_json=json.dumps(forecast.evidence[:5]),
-                invalidation_triggers_json=json.dumps(forecast.invalidation_triggers),
-                research_evidence_json=json.dumps({
-                    **evidence.to_dict(),
-                    "classification": classification.to_dict(),
-                }),
-            ))
+    def _stage_persist_forecast(self, ctx: PipelineContext) -> None:
+        """Persist forecast and market records to DB."""
+        if not self._db:
+            return
+        from src.storage.models import ForecastRecord, MarketRecord
+        self._db.upsert_market(MarketRecord(
+            id=ctx.market_id, condition_id=ctx.market.condition_id,
+            question=ctx.question, market_type=ctx.market.market_type,
+            category=ctx.market.category, volume=ctx.market.volume,
+            liquidity=ctx.market.liquidity,
+            end_date=ctx.market.end_date.isoformat() if ctx.market.end_date else "",
+            resolution_source=ctx.market.resolution_source,
+        ))
+        self._db.insert_forecast(ForecastRecord(
+            id=str(uuid.uuid4()), market_id=ctx.market_id,
+            question=ctx.question, market_type=ctx.market.market_type,
+            implied_probability=ctx.forecast.implied_probability,
+            model_probability=ctx.forecast.model_probability,
+            edge=ctx.forecast.edge,
+            confidence_level=ctx.forecast.confidence_level,
+            evidence_quality=ctx.evidence.quality_score,
+            num_sources=ctx.evidence.num_sources,
+            decision=ctx.risk_result.decision,
+            reasoning=ctx.forecast.reasoning[:500],
+            evidence_json=json.dumps(ctx.forecast.evidence[:5]),
+            invalidation_triggers_json=json.dumps(ctx.forecast.invalidation_triggers),
+            research_evidence_json=json.dumps({
+                **ctx.evidence.to_dict(),
+                "classification": ctx.classification.to_dict(),
+            }),
+        ))
 
-        # ── Decision Gate ────────────────────────────────────────────
-        if not risk_result.allowed:
-            log.info("engine.no_trade", market_id=market_id, violations=risk_result.violations)
-            self._log_candidate(
-                cycle_id, market, forecast=forecast, evidence=evidence,
-                edge_result=edge_result, decision="NO TRADE",
-                reason="; ".join(risk_result.violations),
-            )
-            if self._audit:
-                self._audit.record_trade_decision(
-                    market_id=market_id, question=question,
-                    model_prob=forecast.model_probability,
-                    implied_prob=forecast.implied_probability,
-                    edge=forecast.edge, confidence=forecast.confidence_level,
-                    risk_result=risk_result.to_dict(), position_size=0.0,
-                    evidence_summary=evidence.summary[:200],
-                )
-            return result
+    def _stage_correlation_check(self, ctx: PipelineContext) -> None:
+        """Check portfolio correlation before allowing entry."""
+        if not self._positions or not ctx.risk_result.allowed:
+            return
+        from src.policy.portfolio_risk import check_correlation
+        corr_ok, corr_reason = check_correlation(
+            existing_positions=self._positions,
+            new_question=ctx.question,
+            new_category=ctx.classification.category if ctx.classification else "",
+            new_event_slug=ctx.market.slug or "",
+            similarity_threshold=self.config.portfolio.correlation_similarity_threshold,
+        )
+        if not corr_ok:
+            ctx.risk_result.allowed = False
+            ctx.risk_result.violations.append(f"Correlation: {corr_reason}")
+            log.info("engine.correlation_blocked",
+                     market_id=ctx.market_id, reason=corr_reason)
 
-        # ── Stage 6: Position Sizing ─────────────────────────────────
+    def _stage_position_sizing(self, ctx: PipelineContext) -> None:
+        """Stage 6: Calculate position size. Sets ctx.position to None if too small."""
         from src.policy.position_sizer import calculate_position_size
         regime_kelly = (
             self._current_regime.kelly_multiplier
@@ -665,38 +823,44 @@ class TradingEngine:
             self._current_regime.size_multiplier
             if self._current_regime else 1.0
         )
-        position = calculate_position_size(
-            edge=edge_result, risk_config=self.config.risk,
-            confidence_level=forecast.confidence_level,
+        ctx.position = calculate_position_size(
+            edge=ctx.edge_result, risk_config=self.config.risk,
+            confidence_level=ctx.forecast.confidence_level,
             drawdown_multiplier=self.drawdown.state.kelly_multiplier,
-            timeline_multiplier=features.time_decay_multiplier,
-            price_volatility=features.price_volatility,
+            timeline_multiplier=ctx.features.time_decay_multiplier,
+            price_volatility=ctx.features.price_volatility,
             regime_multiplier=regime_kelly * regime_size,
         )
-        if position.stake_usd < 1.0:
-            log.info("engine.stake_too_small", market_id=market_id, stake=position.stake_usd)
+        if ctx.position.stake_usd < 1.0:
+            log.info("engine.stake_too_small", market_id=ctx.market_id,
+                     stake=ctx.position.stake_usd)
             self._log_candidate(
-                cycle_id, market, forecast=forecast, evidence=evidence,
-                edge_result=edge_result, decision="NO TRADE",
-                reason="Stake too small", stake=position.stake_usd,
+                ctx.cycle_id, ctx.market, forecast=ctx.forecast,
+                evidence=ctx.evidence, edge_result=ctx.edge_result,
+                decision="NO TRADE", reason="Stake too small",
+                stake=ctx.position.stake_usd,
             )
-            return result
+            ctx.position = None
 
-        result["trade_attempted"] = True
-
-        # ── Stage 7: Build & Route Order ─────────────────────────────
+    async def _stage_execute_order(self, ctx: PipelineContext) -> None:
+        """Stage 7: Build and route orders."""
         from src.execution.order_builder import build_order
         from src.execution.order_router import OrderRouter
         from src.connectors.polymarket_clob import CLOBClient
 
+        market = ctx.market
+        forecast = ctx.forecast
+        edge_result = ctx.edge_result
+        position = ctx.position
+
         yes_tokens = [t for t in market.tokens if t.outcome.lower() == "yes"]
         no_tokens = [t for t in market.tokens if t.outcome.lower() == "no"]
-        # For non-Yes/No markets, treat first token as "yes", second as "no"
         if not yes_tokens and not no_tokens and len(market.tokens) >= 2:
             yes_tokens = [market.tokens[0]]
             no_tokens = [market.tokens[1]]
         elif not yes_tokens and market.tokens:
             yes_tokens = [market.tokens[0]]
+
         if edge_result.direction == "BUY_YES" and yes_tokens:
             token_id = yes_tokens[0].token_id
             implied_price = yes_tokens[0].price or forecast.implied_probability
@@ -707,17 +871,17 @@ class TradingEngine:
             token_id = (yes_tokens[0].token_id if yes_tokens
                         else (no_tokens[0].token_id if no_tokens else ""))
             implied_price = forecast.implied_probability
+
         if not token_id:
-            log.warning("engine.no_token_id", market_id=market_id)
+            log.warning("engine.no_token_id", market_id=ctx.market_id)
             self._log_candidate(
-                cycle_id, market, forecast=forecast, evidence=evidence,
+                ctx.cycle_id, market, forecast=forecast, evidence=ctx.evidence,
                 edge_result=edge_result, decision="NO TRADE",
                 reason="No token ID available",
             )
-            return result
+            return
 
-        # ── Smart Entry: Calculate optimal entry price ───────────────
-        entry_plan = None
+        # Smart Entry: Calculate optimal entry price
         execution_strategy = "simple"
         try:
             regime_patience = (
@@ -725,13 +889,13 @@ class TradingEngine:
                 if self._current_regime else 1.0
             )
             entry_plan = self._smart_entry.calculate_entry(
-                market_id=market_id,
+                market_id=ctx.market_id,
                 side=edge_result.direction,
                 current_price=implied_price,
                 fair_value=forecast.model_probability,
                 edge=edge_result.abs_net_edge,
-                spread=getattr(features, "spread", 0.0),
-                hours_to_resolution=getattr(features, "hours_to_resolution", 720.0),
+                spread=getattr(ctx.features, "spread", 0.0),
+                hours_to_resolution=getattr(ctx.features, "hours_to_resolution", 720.0),
                 regime_patience=regime_patience,
             )
             if entry_plan and entry_plan.recommended_price > 0:
@@ -740,8 +904,7 @@ class TradingEngine:
                 if entry_plan.recommended_strategy == "twap":
                     execution_strategy = "twap"
                 log.info(
-                    "engine.smart_entry",
-                    market_id=market_id,
+                    "engine.smart_entry", market_id=ctx.market_id,
                     old_price=round(old_price, 4),
                     new_price=round(implied_price, 4),
                     strategy=entry_plan.recommended_strategy,
@@ -751,20 +914,21 @@ class TradingEngine:
             log.warning("engine.smart_entry_error", error=str(e))
 
         orders = build_order(
-            market_id=market_id, token_id=token_id,
+            market_id=ctx.market_id, token_id=token_id,
             position=position, implied_price=implied_price,
             config=self.config.execution, execution_strategy=execution_strategy,
         )
 
         clob = CLOBClient()
         router = OrderRouter(clob, self.config.execution)
-        order_statuses: list[str] = []
+        ctx._order_statuses = []  # list[str]
+        ctx._token_id = token_id
         try:
             for order in orders:
                 order_result = await router.submit_order(order)
-                order_statuses.append(order_result.status)
+                ctx._order_statuses.append(order_result.status)
                 log.info(
-                    "engine.order_result", market_id=market_id,
+                    "engine.order_result", market_id=ctx.market_id,
                     order_id=order_result.order_id[:8],
                     status=order_result.status,
                     fill_price=order_result.fill_price,
@@ -775,7 +939,7 @@ class TradingEngine:
                     self._db.insert_trade(TradeRecord(
                         id=str(uuid.uuid4()),
                         order_id=order_result.order_id,
-                        market_id=market_id, token_id=token_id,
+                        market_id=ctx.market_id, token_id=token_id,
                         side=edge_result.direction,
                         price=order_result.fill_price,
                         size=order_result.fill_size,
@@ -784,71 +948,84 @@ class TradingEngine:
                         dry_run=order_result.status == "simulated",
                     ))
                     self._db.upsert_position(PositionRecord(
-                        market_id=market_id, token_id=token_id,
+                        market_id=ctx.market_id, token_id=token_id,
                         direction=edge_result.direction,
                         entry_price=order_result.fill_price,
                         size=order_result.fill_size,
                         stake_usd=position.stake_usd,
                         current_price=order_result.fill_price, pnl=0.0,
                     ))
-                result["trade_executed"] = True
+                ctx.result["trade_executed"] = True
+                # Subscribe token to WebSocket feed for live pricing
+                self._ws_feed.subscribe(token_id)
         finally:
             await clob.close()
 
-        # ── Stage 8: Audit ───────────────────────────────────────────
+    def _stage_audit_and_log(self, ctx: PipelineContext) -> None:
+        """Stage 8: Audit trail + logging + adaptive weight recording."""
+        order_statuses = getattr(ctx, "_order_statuses", [])
+        token_id = getattr(ctx, "_token_id", "")
+
         if self._audit:
             self._audit.record_trade_decision(
-                market_id=market_id, question=question,
-                model_prob=forecast.model_probability,
-                implied_prob=forecast.implied_probability,
-                edge=forecast.edge, confidence=forecast.confidence_level,
-                risk_result=risk_result.to_dict(),
-                position_size=position.stake_usd,
-                order_id=orders[0].order_id if orders else "",
-                evidence_summary=evidence.summary[:200],
+                market_id=ctx.market_id, question=ctx.question,
+                model_prob=ctx.forecast.model_probability,
+                implied_prob=ctx.forecast.implied_probability,
+                edge=ctx.forecast.edge,
+                confidence=ctx.forecast.confidence_level,
+                risk_result=ctx.risk_result.to_dict(),
+                position_size=ctx.position.stake_usd if ctx.position else 0.0,
+                order_id="",
+                evidence_summary=ctx.evidence.summary[:200],
             )
 
         self._log_candidate(
-            cycle_id, market, forecast=forecast, evidence=evidence,
-            edge_result=edge_result, decision="TRADE",
-            reason="All checks passed", stake=position.stake_usd,
+            ctx.cycle_id, ctx.market, forecast=ctx.forecast,
+            evidence=ctx.evidence, edge_result=ctx.edge_result,
+            decision="TRADE", reason="All checks passed",
+            stake=ctx.position.stake_usd if ctx.position else 0.0,
             order_status=order_statuses[0] if order_statuses else "",
         )
         if self._db:
-            mode = "\U0001f9ea Paper" if order_statuses and order_statuses[0] == "simulated" else "\U0001f4b0 Live"
+            mode = (
+                "\U0001f9ea Paper"
+                if order_statuses and order_statuses[0] == "simulated"
+                else "\U0001f4b0 Live"
+            )
             self._db.insert_alert(
                 "info",
-                f'{mode} trade: {edge_result.direction} on "{question[:60]}" '
-                f"\u2014 stake ${position.stake_usd:.2f}, edge {forecast.edge:+.3f}, "
-                f"confidence {forecast.confidence_level}",
-                "trade", market_id,
+                f'{mode} trade: {ctx.edge_result.direction} on '
+                f'"{ctx.question[:60]}" '
+                f"\u2014 stake ${ctx.position.stake_usd:.2f}, "
+                f"edge {ctx.forecast.edge:+.3f}, "
+                f"confidence {ctx.forecast.confidence_level}",
+                "trade", ctx.market_id,
             )
         log.info(
-            "engine.trade_executed", market_id=market_id,
-            direction=edge_result.direction, stake=position.stake_usd,
-            edge=round(forecast.edge, 3), status=order_statuses,
+            "engine.trade_executed", market_id=ctx.market_id,
+            direction=ctx.edge_result.direction,
+            stake=ctx.position.stake_usd if ctx.position else 0.0,
+            edge=round(ctx.forecast.edge, 3), status=order_statuses,
         )
 
-        # ── Record for adaptive weighting (model accuracy log) ───────
+        # Record for adaptive weighting (model accuracy log)
         try:
-            if self._db and hasattr(forecast, 'model_forecasts'):
-                for model_name, prob in (forecast.model_forecasts or {}).items():
+            if self._db and hasattr(ctx.forecast, 'model_forecasts'):
+                for model_name, prob in (ctx.forecast.model_forecasts or {}).items():
                     self._db.conn.execute("""
                         INSERT INTO model_forecast_log
                             (model_name, market_id, category, forecast_prob,
                              actual_outcome, recorded_at)
                         VALUES (?, ?, ?, ?, ?, ?)
                     """, (
-                        model_name, market_id,
-                        classification.category if classification else "UNKNOWN",
-                        prob, -1.0,  # actual_outcome set to -1 = unresolved
+                        model_name, ctx.market_id,
+                        ctx.classification.category if ctx.classification else "UNKNOWN",
+                        prob, -1.0,
                         time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     ))
                     self._db.conn.commit()
         except Exception as e:
             log.warning("engine.model_forecast_log_error", error=str(e))
-
-        return result
 
     def _log_candidate(
         self, cycle_id: int, market: Any,
@@ -882,7 +1059,11 @@ class TradingEngine:
             log.warning("engine.log_candidate_error", error=str(e))
 
     async def _check_positions(self) -> None:
-        """Fetch live prices for all open positions and update PNL."""
+        """Fetch live prices for all open positions and update PNL.
+
+        Uses WebSocket feed when available for instant pricing,
+        falls back to Gamma REST API when WS prices are stale or unavailable.
+        """
         if not self._db:
             return
 
@@ -895,17 +1076,28 @@ class TradingEngine:
 
         client = GammaClient()
         snapshots: list[PositionSnapshot] = []
+        ws_hits = 0
+        rest_hits = 0
         try:
             for pos in positions:
                 try:
-                    market = await client.get_market(pos.market_id)
-
-                    # Find the matching token price
-                    current_price = pos.current_price  # fallback
-                    for tok in market.tokens:
-                        if tok.token_id == pos.token_id:
-                            current_price = tok.price
-                            break
+                    # Try WebSocket feed first for instant pricing
+                    current_price = None
+                    ws_tick = self._ws_feed.get_last_price(pos.token_id)
+                    if ws_tick and (time.time() - ws_tick.timestamp) < 60:
+                        current_price = ws_tick.mid or ws_tick.best_bid
+                        ws_hits += 1
+                    
+                    # Fall back to REST API if WS price unavailable or stale
+                    market = None
+                    if current_price is None:
+                        market = await client.get_market(pos.market_id)
+                        current_price = pos.current_price  # fallback
+                        for tok in market.tokens:
+                            if tok.token_id == pos.token_id:
+                                current_price = tok.price
+                                break
+                        rest_hits += 1
 
                     # Calculate PNL based on direction
                     if pos.direction in ("BUY_YES", "BUY"):
@@ -920,6 +1112,8 @@ class TradingEngine:
                     )
 
                     # Build snapshot for portfolio risk
+                    if market is None:
+                        market = await client.get_market(pos.market_id)
                     mkt_record = self._db.get_market(pos.market_id)
                     snapshots.append(PositionSnapshot(
                         market_id=pos.market_id,
@@ -939,6 +1133,7 @@ class TradingEngine:
                         entry=pos.entry_price,
                         current=current_price,
                         pnl=round(pnl, 4),
+                        source="ws" if ws_tick else "rest",
                     )
 
                 except Exception as e:
@@ -968,7 +1163,71 @@ class TradingEngine:
             "engine.positions_checked",
             count=len(snapshots),
             total_pnl=round(sum(s.unrealised_pnl for s in snapshots), 4),
+            ws_hits=ws_hits,
+            rest_hits=rest_hits,
         )
+
+    async def _maybe_rebalance(self) -> None:
+        """Check for portfolio drift and log rebalance signals."""
+        interval = self.config.portfolio.rebalance_check_interval_minutes * 60
+        now = time.time()
+        if now - self._last_rebalance_check < interval:
+            return
+
+        self._last_rebalance_check = now
+        if not self._positions:
+            return
+
+        try:
+            signals = self.portfolio.check_rebalance(self._positions)
+            if signals:
+                for sig in signals:
+                    log.warning(
+                        "engine.rebalance_signal",
+                        type=sig.signal_type,
+                        urgency=sig.urgency,
+                        description=sig.description,
+                    )
+                    if self._db:
+                        self._db.insert_alert(
+                            "warning",
+                            f"⚖️ Rebalance: {sig.description}",
+                            "risk",
+                        )
+        except Exception as e:
+            log.warning("engine.rebalance_error", error=str(e))
+
+    async def _maybe_scan_arbitrage(self, markets: list[Any]) -> None:
+        """Scan for arbitrage opportunities across discovered markets."""
+        interval = self.config.portfolio.rebalance_check_interval_minutes * 60
+        now = time.time()
+        if now - self._last_arbitrage_scan < interval:
+            return
+
+        self._last_arbitrage_scan = now
+        if not markets:
+            return
+
+        try:
+            from src.policy.arbitrage import detect_arbitrage
+            opps = detect_arbitrage(markets, fee_bps=int(self.config.risk.transaction_fee_pct * 10000))
+            self._latest_arb_opportunities = opps
+            if opps:
+                actionable = [o for o in opps if o.is_actionable]
+                log.info(
+                    "engine.arbitrage_scan",
+                    total=len(opps),
+                    actionable=len(actionable),
+                )
+                for opp in actionable[:3]:
+                    if self._db:
+                        self._db.insert_alert(
+                            "info",
+                            f"🔀 Arb: {opp.description}",
+                            "arbitrage",
+                        )
+        except Exception as e:
+            log.warning("engine.arbitrage_scan_error", error=str(e))
 
     async def _maybe_scan_wallets(self) -> None:
         """Run wallet scanner if enabled and interval elapsed."""

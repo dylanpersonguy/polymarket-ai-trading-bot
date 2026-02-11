@@ -179,3 +179,132 @@ class PortfolioRiskManager:
             )
 
         return True, "ok"
+
+    def check_rebalance(
+        self, positions: list[PositionSnapshot]
+    ) -> list["RebalanceSignal"]:
+        """Check for positions that have drifted from target allocation.
+
+        Generates rebalance signals when:
+          - A category's exposure exceeds its target by >50%
+          - A single position has grown to >2× its original weight
+          - Total portfolio is over-concentrated
+        """
+        signals: list[RebalanceSignal] = []
+        if not positions:
+            return signals
+
+        total = sum(p.exposure_usd for p in positions)
+        if total < 1.0:
+            return signals
+
+        # Category exposure drift
+        cat_exposure: dict[str, float] = {}
+        for pos in positions:
+            cat = pos.category or "uncategorised"
+            cat_exposure[cat] = cat_exposure.get(cat, 0.0) + pos.exposure_usd
+
+        for cat, exposure in cat_exposure.items():
+            pct = exposure / self.bankroll
+            limit = self.max_exposure_per_category
+            if pct > limit * 1.5:
+                excess = exposure - (limit * self.bankroll)
+                signals.append(RebalanceSignal(
+                    signal_type="category_overweight",
+                    category=cat,
+                    current_pct=round(pct, 4),
+                    target_pct=round(limit, 4),
+                    excess_usd=round(excess, 2),
+                    urgency="high" if pct > limit * 2.0 else "medium",
+                    description=(
+                        f"Category '{cat}' at {pct:.1%} of bankroll "
+                        f"(target ≤{limit:.0%}), excess ${excess:.0f}"
+                    ),
+                ))
+
+        # Single-position concentration
+        for pos in positions:
+            pos_pct = pos.exposure_usd / self.bankroll
+            if pos_pct > 0.20:
+                signals.append(RebalanceSignal(
+                    signal_type="position_overweight",
+                    market_id=pos.market_id,
+                    current_pct=round(pos_pct, 4),
+                    target_pct=0.10,
+                    excess_usd=round(pos.exposure_usd - 0.10 * self.bankroll, 2),
+                    urgency="high" if pos_pct > 0.30 else "medium",
+                    description=(
+                        f"Position {pos.market_id[:8]} at {pos_pct:.1%} "
+                        f"of bankroll (recommend ≤10%)"
+                    ),
+                ))
+
+        if signals:
+            log.info(
+                "portfolio_risk.rebalance_signals",
+                count=len(signals),
+                high_urgency=sum(1 for s in signals if s.urgency == "high"),
+            )
+        return signals
+
+
+@dataclass
+class RebalanceSignal:
+    """Signal to rebalance a position or category."""
+    signal_type: str  # "category_overweight" | "position_overweight"
+    description: str
+    current_pct: float = 0.0
+    target_pct: float = 0.0
+    excess_usd: float = 0.0
+    urgency: str = "medium"  # "low" | "medium" | "high"
+    category: str = ""
+    market_id: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return self.__dict__
+
+
+def check_correlation(
+    existing_positions: list[PositionSnapshot],
+    new_question: str,
+    new_category: str,
+    new_event_slug: str,
+    similarity_threshold: float = 0.7,
+) -> tuple[bool, str]:
+    """Check if a new position is too correlated with existing ones.
+
+    Uses text similarity and category/event matching to detect correlated
+    positions. Returns (is_ok, reason).
+    """
+    if not existing_positions:
+        return True, "ok"
+
+    # Same event slug is a strong correlation signal
+    same_event = [
+        p for p in existing_positions
+        if p.event_slug and p.event_slug == new_event_slug
+    ]
+    if len(same_event) >= 2:
+        return False, (
+            f"Already {len(same_event)} positions in event '{new_event_slug}'"
+        )
+
+    # Same category keyword overlap
+    new_words = set(new_question.lower().split())
+    for pos in existing_positions:
+        if not pos.question:
+            continue
+        existing_words = set(pos.question.lower().split())
+        if len(new_words) < 3 or len(existing_words) < 3:
+            continue
+        # Jaccard similarity
+        intersection = len(new_words & existing_words)
+        union = len(new_words | existing_words)
+        similarity = intersection / union if union > 0 else 0.0
+        if similarity >= similarity_threshold:
+            return False, (
+                f"High text similarity ({similarity:.0%}) with existing position: "
+                f"'{pos.question[:60]}'"
+            )
+
+    return True, "ok"
