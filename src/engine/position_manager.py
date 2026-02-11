@@ -2,8 +2,8 @@
 
 Exit strategies:
   1. Stop-loss: Exit if unrealised loss exceeds threshold
-  2. Take-profit: Exit if unrealised profit hits target
-  3. Time-based: Exit before market resolution
+  2. Take-profit: Hold to resolution — only sell at 100% ($1.00 YES / $0.00 NO)
+  3. Time-based: Disabled by default (hold through resolution)
   4. Edge reversal: Exit if model probability flips direction
   5. Drawdown: Force exit all positions when kill-switch triggers
 """
@@ -97,8 +97,8 @@ class PositionManager:
     def __init__(
         self,
         stop_loss_pct: float = 0.20,
-        take_profit_pct: float = 0.50,
-        exit_before_hours: float = 12.0,
+        take_profit_pct: float = 1.0,  # Hold to resolution (100%)
+        exit_before_hours: float = 0.0,  # Disabled — hold through resolution
     ):
         self.positions: dict[str, PositionRecord] = {}
         self.closed_positions: list[PositionRecord] = []
@@ -121,13 +121,14 @@ class PositionManager:
     ) -> PositionRecord:
         """Record a new position."""
         # Calculate stop-loss and take-profit prices
+        # TP strategy: hold to resolution — only take profit at $1.00 (YES) / $0.00 (NO)
         if side == "YES":
             stop_price = max(0.01, entry_price * (1 - self.stop_loss_pct))
-            tp_price = min(0.99, entry_price * (1 + self.take_profit_pct))
+            tp_price = 0.99  # Sell at 100% — resolution price for YES
         else:
             # For NO positions, direction is inverted
             stop_price = min(0.99, entry_price * (1 + self.stop_loss_pct))
-            tp_price = max(0.01, entry_price * (1 - self.take_profit_pct))
+            tp_price = 0.01  # Sell at 100% — resolution price for NO
 
         pos = PositionRecord(
             market_id=market_id,
@@ -237,15 +238,15 @@ class PositionManager:
                     ),
                 ))
 
-            # Take-profit
+            # Take-profit: hold to resolution — only sell at 100% ($1.00 / $0.00)
             if pos.side == "YES" and pos.current_price >= pos.take_profit_price:
                 signals.append(ExitSignal(
                     market_id=market_id,
                     reason="take_profit",
-                    urgency="soon",
+                    urgency="immediate",
                     current_pnl_pct=pos.pnl_pct,
                     details=(
-                        f"Price {pos.current_price:.3f} >= "
+                        f"Market resolved/100% — price {pos.current_price:.3f} >= "
                         f"TP {pos.take_profit_price:.3f}"
                     ),
                 ))
@@ -253,10 +254,10 @@ class PositionManager:
                 signals.append(ExitSignal(
                     market_id=market_id,
                     reason="take_profit",
-                    urgency="soon",
+                    urgency="immediate",
                     current_pnl_pct=pos.pnl_pct,
                     details=(
-                        f"Price {pos.current_price:.3f} <= "
+                        f"Market resolved/100% — price {pos.current_price:.3f} <= "
                         f"TP {pos.take_profit_price:.3f}"
                     ),
                 ))

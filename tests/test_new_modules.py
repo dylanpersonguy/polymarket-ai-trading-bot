@@ -164,11 +164,12 @@ class TestTimeline:
         assert result.sizing_multiplier >= 1.0
 
     def test_endgame_market(self) -> None:
+        """With hold-to-resolution strategy, near-expiry markets stay 'late' and never force exit."""
         end = dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=6)
         result = assess_timeline("m1", end)
-        assert result.phase == "endgame"
-        assert result.should_exit_before is True
-        assert result.sizing_multiplier < 1.0
+        assert result.phase == "late"  # No endgame since exit_before_resolution_hours=0
+        assert result.should_exit_before is False  # Hold through resolution
+        assert result.sizing_multiplier >= 1.0
 
 
 # ─── Arbitrage Detection ────────────────────────────────────────────
@@ -262,12 +263,36 @@ class TestPositionManager:
         assert any(s.reason == "stop_loss" for s in signals)
 
     def test_take_profit_signal(self) -> None:
-        mgr = PositionManager(take_profit_pct=0.50)
+        """TP only fires at resolution price: 0.99 for YES, 0.01 for NO."""
+        mgr = PositionManager()
         mgr.open_position(
             market_id="m1", question="Test?", category="MACRO",
             event_slug="test", side="YES", size_usd=100, entry_price=0.50,
         )
-        mgr.update_price("m1", 0.80)  # Above take profit
+        # 0.80 should NOT trigger TP (hold to resolution)
+        mgr.update_price("m1", 0.80)
+        signals = mgr.check_exits()
+        assert not any(s.reason == "take_profit" for s in signals)
+
+        # 0.99 should trigger TP (market resolved / 100%)
+        mgr.update_price("m1", 0.99)
+        signals = mgr.check_exits()
+        assert any(s.reason == "take_profit" for s in signals)
+
+    def test_take_profit_no_side(self) -> None:
+        """TP for NO position fires at 0.01 (resolution price)."""
+        mgr = PositionManager()
+        mgr.open_position(
+            market_id="m1", question="Test?", category="MACRO",
+            event_slug="test", side="NO", size_usd=100, entry_price=0.60,
+        )
+        # 0.30 should NOT trigger TP
+        mgr.update_price("m1", 0.30)
+        signals = mgr.check_exits()
+        assert not any(s.reason == "take_profit" for s in signals)
+
+        # 0.01 should trigger TP (market resolved for NO)
+        mgr.update_price("m1", 0.01)
         signals = mgr.check_exits()
         assert any(s.reason == "take_profit" for s in signals)
 

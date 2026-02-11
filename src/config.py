@@ -126,7 +126,7 @@ class TimelineConfig(BaseModel):
     near_resolution_confidence_boost: float = 0.15
     early_market_uncertainty_penalty: float = 0.10
     early_market_days_threshold: int = 60
-    exit_before_resolution_hours: int = 12
+    exit_before_resolution_hours: int = 0  # Disabled — hold through resolution
     time_decay_urgency_start_days: int = 7
     time_decay_max_multiplier: float = 1.5
 

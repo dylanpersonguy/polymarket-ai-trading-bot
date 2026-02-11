@@ -13,7 +13,7 @@ Runs on a configurable cycle (default 5 minutes):
 
 Between cycles:
   - Check drawdown state
-  - Monitor position exits (stop-loss, take-profit, time-based)
+  - Monitor position exits (stop-loss, resolution/100%, time-based)
   - Persist engine state to DB for dashboard
 """
 
