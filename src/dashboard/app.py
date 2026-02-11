@@ -971,6 +971,80 @@ def api_execution_quality() -> Any:
         conn.close()
 
 
+# ─── API: Whale / Wallet Scanner ─────────────────────────────────
+
+@app.route("/api/whale-activity")
+def api_whale_activity() -> Any:
+    """Return whale tracker data: tracked wallets, conviction signals, deltas."""
+    conn = _get_conn()
+    try:
+        # Check if tables exist
+        tables = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='tracked_wallets'"
+        ).fetchone()
+        if not tables:
+            return jsonify({
+                "tracked_wallets": [],
+                "conviction_signals": [],
+                "recent_deltas": [],
+                "summary": {
+                    "total_wallets": 0,
+                    "total_signals": 0,
+                    "strong_signals": 0,
+                    "recent_entries": 0,
+                    "recent_exits": 0,
+                    "last_scan": None,
+                },
+            })
+
+        # Tracked wallets (sorted by score)
+        w_rows = conn.execute(
+            "SELECT * FROM tracked_wallets ORDER BY score DESC"
+        ).fetchall()
+        wallets = [dict(r) for r in w_rows]
+
+        # Recent conviction signals (last 50)
+        s_rows = conn.execute(
+            "SELECT * FROM wallet_signals ORDER BY detected_at DESC LIMIT 50"
+        ).fetchall()
+        signals = []
+        for r in s_rows:
+            d = dict(r)
+            try:
+                d["whale_names"] = json.loads(d.get("whale_names_json", "[]"))
+            except (json.JSONDecodeError, TypeError):
+                d["whale_names"] = []
+            signals.append(d)
+
+        # Recent deltas (last 100)
+        d_rows = conn.execute(
+            "SELECT * FROM wallet_deltas ORDER BY detected_at DESC LIMIT 100"
+        ).fetchall()
+        deltas = [dict(r) for r in d_rows]
+
+        # Summary stats
+        strong_count = sum(1 for s in signals if s.get("signal_strength") == "STRONG")
+        new_entries = sum(1 for d in deltas if d.get("action") == "NEW_ENTRY")
+        exits = sum(1 for d in deltas if d.get("action") == "EXIT")
+        last_scan = wallets[0].get("last_scanned") if wallets else None
+
+        return jsonify({
+            "tracked_wallets": wallets,
+            "conviction_signals": signals,
+            "recent_deltas": deltas,
+            "summary": {
+                "total_wallets": len(wallets),
+                "total_signals": len(signals),
+                "strong_signals": strong_count,
+                "recent_entries": new_entries,
+                "recent_exits": exits,
+                "last_scan": last_scan,
+            },
+        })
+    finally:
+        conn.close()
+
+
 # ─── API: Configuration (Full — all sections) ─────────────────────
 
 @app.route("/api/config")

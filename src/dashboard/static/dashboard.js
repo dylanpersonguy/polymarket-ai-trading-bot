@@ -1656,6 +1656,107 @@ async function updateRegime() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  WHALE / SMART MONEY TRACKER
+// ═══════════════════════════════════════════════════════════════
+
+async function updateWhaleTracker() {
+    const data = await apiFetch('/api/whale-activity');
+    if (!data) return;
+
+    const s = data.summary || {};
+
+    // Summary cards
+    safeHTML($('#whale-total-wallets'), String(s.total_wallets || 0));
+    safeHTML($('#whale-total-signals'), String(s.total_signals || 0));
+    safeHTML($('#whale-strong-signals'), `Strong: ${s.strong_signals || 0}`);
+    safeHTML($('#whale-recent-entries'), String(s.recent_entries || 0));
+    safeHTML($('#whale-recent-exits'), `Exits: ${s.recent_exits || 0}`);
+    safeHTML($('#whale-last-scan'), s.last_scan ? `Last scan: ${shortDate(s.last_scan)}` : 'Last scan: —');
+
+    // Conviction signals table
+    const signals = data.conviction_signals || [];
+    if (signals.length === 0) {
+        safeHTML($('#conviction-body'),
+            '<tr><td colspan="11" class="empty-state">No conviction signals yet — run a wallet scan to populate</td></tr>');
+    } else {
+        const rows = signals.map(sig => {
+            const strengthClass = sig.signal_strength === 'STRONG' ? 'pnl-positive'
+                : sig.signal_strength === 'MODERATE' ? 'pnl-zero' : 'pnl-negative';
+            const dirIcon = sig.direction === 'BULLISH' ? '🟢' : '🔴';
+            const names = (sig.whale_names || []).slice(0, 3).join(', ');
+            const namesSuffix = (sig.whale_names || []).length > 3
+                ? ` +${(sig.whale_names || []).length - 3}` : '';
+            return `<tr>
+                <td title="${sig.market_slug || ''}">${(sig.title || sig.market_slug || '—').substring(0, 50)}</td>
+                <td>${sig.outcome || '—'}</td>
+                <td><strong>${sig.whale_count || 0}</strong></td>
+                <td>${fmtD(sig.total_whale_usd)}</td>
+                <td>${fmt(sig.avg_whale_price, 3)}</td>
+                <td>${fmt(sig.current_price, 3)}</td>
+                <td><strong>${fmt(sig.conviction_score, 0)}</strong></td>
+                <td class="${strengthClass}"><strong>${sig.signal_strength || '—'}</strong></td>
+                <td>${dirIcon} ${sig.direction || '—'}</td>
+                <td title="${(sig.whale_names || []).join(', ')}">${names}${namesSuffix}</td>
+                <td>${shortDate(sig.detected_at)}</td>
+            </tr>`;
+        }).join('');
+        safeHTML($('#conviction-body'), rows);
+    }
+
+    // Recent deltas table
+    const deltas = data.recent_deltas || [];
+    if (deltas.length === 0) {
+        safeHTML($('#whale-deltas-body'),
+            '<tr><td colspan="8" class="empty-state">No whale activity detected yet</td></tr>');
+    } else {
+        const dRows = deltas.slice(0, 30).map(d => {
+            const actionIcons = {
+                'NEW_ENTRY': '🟢 Entry',
+                'EXIT': '🔴 Exit',
+                'SIZE_INCREASE': '📈 ↑ Size',
+                'SIZE_DECREASE': '📉 ↓ Size',
+            };
+            const actionLabel = actionIcons[d.action] || d.action;
+            const valClass = d.value_change_usd >= 0 ? 'pnl-positive' : 'pnl-negative';
+            return `<tr>
+                <td><strong>${d.wallet_name || d.wallet_address?.substring(0, 10) || '—'}</strong></td>
+                <td>${actionLabel}</td>
+                <td title="${d.market_slug || ''}">${(d.title || d.market_slug || '—').substring(0, 45)}</td>
+                <td>${d.outcome || '—'}</td>
+                <td>${fmt(d.size_change, 2)}</td>
+                <td class="${valClass}">${fmtD(d.value_change_usd)}</td>
+                <td>${fmt(d.current_price, 3)}</td>
+                <td>${shortDate(d.detected_at)}</td>
+            </tr>`;
+        }).join('');
+        safeHTML($('#whale-deltas-body'), dRows);
+    }
+
+    // Tracked wallets leaderboard
+    const wallets = data.tracked_wallets || [];
+    if (wallets.length === 0) {
+        safeHTML($('#tracked-wallets-body'),
+            '<tr><td colspan="8" class="empty-state">No wallets tracked yet</td></tr>');
+    } else {
+        const wRows = wallets.map((w, i) => {
+            const pnlCls = w.total_pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+            const shortAddr = w.address ? `${w.address.substring(0, 6)}…${w.address.slice(-4)}` : '—';
+            return `<tr>
+                <td><strong>#${i + 1}</strong></td>
+                <td><strong>${w.name || '—'}</strong></td>
+                <td><code title="${w.address}">${shortAddr}</code></td>
+                <td class="${pnlCls}"><strong>${fmtD(w.total_pnl)}</strong></td>
+                <td>${fmtP(((w.win_rate || 0) * 100))}</td>
+                <td>${w.active_positions || 0}</td>
+                <td><strong>${fmt(w.score, 0)}</strong></td>
+                <td>${shortDate(w.last_scanned)}</td>
+            </tr>`;
+        }).join('');
+        safeHTML($('#tracked-wallets-body'), wRows);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  REFRESH ORCHESTRATION
 // ═══════════════════════════════════════════════════════════════
 
@@ -1679,6 +1780,7 @@ async function refreshAll() {
         updateConfig(),
         updateAnalytics(),
         updateRegime(),
+        updateWhaleTracker(),
     ]);
     $('#last-updated-time').textContent = new Date().toLocaleTimeString();
 

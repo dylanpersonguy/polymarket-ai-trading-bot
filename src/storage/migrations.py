@@ -8,7 +8,7 @@ from src.observability.logger import get_logger
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 _MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -372,6 +372,76 @@ _MIGRATIONS: dict[int, list[str]] = {
         """,
         """
         CREATE INDEX IF NOT EXISTS idx_scanner_cycle ON scanner_pipeline(cycle_id);
+        """,
+    ],
+
+    # ── Migration 6: Whale / Wallet Scanner tables ───────────────
+    6: [
+        # Tracked whale wallets
+        """
+        CREATE TABLE IF NOT EXISTS tracked_wallets (
+            address TEXT PRIMARY KEY,
+            name TEXT,
+            total_pnl REAL DEFAULT 0,
+            win_rate REAL DEFAULT 0,
+            active_positions INTEGER DEFAULT 0,
+            total_volume REAL DEFAULT 0,
+            score REAL DEFAULT 0,
+            last_scanned TEXT
+        );
+        """,
+
+        # Conviction signals (multi-whale consensus on a market)
+        """
+        CREATE TABLE IF NOT EXISTS wallet_signals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            market_slug TEXT NOT NULL,
+            title TEXT,
+            condition_id TEXT,
+            outcome TEXT,
+            whale_count INTEGER DEFAULT 0,
+            total_whale_usd REAL DEFAULT 0,
+            avg_whale_price REAL DEFAULT 0,
+            current_price REAL DEFAULT 0,
+            conviction_score REAL DEFAULT 0,
+            whale_names_json TEXT DEFAULT '[]',
+            direction TEXT,
+            signal_strength TEXT,
+            detected_at TEXT
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_wallet_signals_market
+            ON wallet_signals(market_slug);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_wallet_signals_detected
+            ON wallet_signals(detected_at);
+        """,
+
+        # Position change deltas (new entries / exits)
+        """
+        CREATE TABLE IF NOT EXISTS wallet_deltas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            wallet_address TEXT NOT NULL,
+            wallet_name TEXT,
+            action TEXT NOT NULL,
+            market_slug TEXT,
+            title TEXT,
+            outcome TEXT,
+            size_change REAL DEFAULT 0,
+            value_change_usd REAL DEFAULT 0,
+            current_price REAL DEFAULT 0,
+            detected_at TEXT
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_wallet_deltas_detected
+            ON wallet_deltas(detected_at);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_wallet_deltas_wallet
+            ON wallet_deltas(wallet_address);
         """,
     ],
 }

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Polymarket Bot — Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css?v=8">
+    <link rel="stylesheet" href="/static/style.css?v=9">
 </head>
 <body>
     <!-- ─── Toast Container ─────────────────────────────────── -->
@@ -275,6 +275,78 @@
         </div>
     </section>
 
+    <!-- ─── Whale / Smart Money Tracker ─────────────────────── -->
+    <section class="panel" id="whale-tracker-panel">
+        <div class="panel-header">
+            <h2>🐋 Smart Money Tracker</h2>
+            <div class="panel-tools">
+                <span class="badge badge-paper" id="whale-last-scan">Last scan: —</span>
+            </div>
+        </div>
+
+        <!-- Whale Summary Cards -->
+        <div class="card-grid" id="whale-summary-cards">
+            <div class="card accent-blue">
+                <div class="card-label">Tracked Wallets</div>
+                <div class="card-value" id="whale-total-wallets">0</div>
+                <div class="card-sub">Top Polymarket traders</div>
+            </div>
+            <div class="card accent-green">
+                <div class="card-label">Conviction Signals</div>
+                <div class="card-value" id="whale-total-signals">0</div>
+                <div class="card-sub" id="whale-strong-signals">Strong: 0</div>
+            </div>
+            <div class="card accent-orange">
+                <div class="card-label">Recent Entries</div>
+                <div class="card-value" id="whale-recent-entries">0</div>
+                <div class="card-sub" id="whale-recent-exits">Exits: 0</div>
+            </div>
+        </div>
+
+        <!-- Conviction Signals Table -->
+        <div class="table-wrap" style="margin-top:16px;">
+            <h3 style="margin:0 0 8px 0;">🎯 Conviction Signals (Multi-Whale Consensus)</h3>
+            <table id="conviction-table">
+                <thead><tr>
+                    <th>Market</th><th>Outcome</th><th>Whales</th><th>Total $</th>
+                    <th>Avg Entry</th><th>Current</th><th>Score</th><th>Strength</th>
+                    <th>Direction</th><th>Who</th><th>Time</th>
+                </tr></thead>
+                <tbody id="conviction-body">
+                    <tr><td colspan="11" class="empty-state">No conviction signals yet — run a wallet scan to populate</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Recent Whale Activity (Deltas) -->
+        <div class="table-wrap" style="margin-top:16px;">
+            <h3 style="margin:0 0 8px 0;">📡 Recent Whale Activity</h3>
+            <table id="whale-deltas-table">
+                <thead><tr>
+                    <th>Whale</th><th>Action</th><th>Market</th><th>Outcome</th>
+                    <th>Size Δ</th><th>Value Δ</th><th>Price</th><th>Time</th>
+                </tr></thead>
+                <tbody id="whale-deltas-body">
+                    <tr><td colspan="8" class="empty-state">No whale activity detected yet</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Tracked Wallets Leaderboard -->
+        <div class="table-wrap" style="margin-top:16px;">
+            <h3 style="margin:0 0 8px 0;">🏆 Tracked Wallets Leaderboard</h3>
+            <table id="tracked-wallets-table">
+                <thead><tr>
+                    <th>Rank</th><th>Name</th><th>Address</th><th>P&L</th>
+                    <th>Win Rate</th><th>Positions</th><th>Score</th><th>Last Scanned</th>
+                </tr></thead>
+                <tbody id="tracked-wallets-body">
+                    <tr><td colspan="8" class="empty-state">No wallets tracked yet</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
     <!-- ─── Pipeline Candidates Log ───────────────────────────── -->
     <section class="panel">
         <div class="panel-header">
@@ -419,6 +491,6 @@
         <span>Auto-refreshes every 15s</span>
     </footer>
 
-    <script src="/static/dashboard.js?v=8"></script>
+    <script src="/static/dashboard.js?v=9"></script>
 </body>
 </html>

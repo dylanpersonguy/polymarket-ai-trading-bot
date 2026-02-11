@@ -35,6 +35,7 @@ from src.analytics.regime_detector import RegimeDetector, RegimeState
 from src.analytics.calibration_feedback import CalibrationFeedbackLoop
 from src.analytics.adaptive_weights import AdaptiveModelWeighter
 from src.analytics.smart_entry import SmartEntryCalculator
+from src.analytics.wallet_scanner import WalletScanner, save_scan_result
 from src.observability.logger import get_logger
 
 log = get_logger(__name__)
@@ -88,6 +89,14 @@ class TradingEngine:
         self._adaptive_weighter = AdaptiveModelWeighter(self.config.ensemble)
         self._smart_entry = SmartEntryCalculator()
         self._current_regime: RegimeState | None = None
+
+        # ── Wallet / Whale Scanner ──
+        self._wallet_scanner = WalletScanner(
+            min_whale_count=self.config.wallet_scanner.min_whale_count,
+            min_conviction_score=self.config.wallet_scanner.min_conviction_score,
+        )
+        self._last_wallet_scan: float = 0.0
+        self._latest_scan_result: Any = None
 
         # Database (initialised in start())
         self._db: Any = None
@@ -300,6 +309,7 @@ class TradingEngine:
                     traceback.print_exc()
 
             await self._check_positions()
+            await self._maybe_scan_wallets()
             cycle.status = "completed"
 
         except Exception as e:
@@ -858,6 +868,41 @@ class TradingEngine:
             count=len(snapshots),
             total_pnl=round(sum(s.unrealised_pnl for s in snapshots), 4),
         )
+
+    async def _maybe_scan_wallets(self) -> None:
+        """Run wallet scanner if enabled and interval elapsed."""
+        if not self.config.wallet_scanner.enabled:
+            return
+
+        interval = self.config.wallet_scanner.scan_interval_minutes * 60
+        now = time.time()
+        if now - self._last_wallet_scan < interval:
+            return
+
+        log.info("engine.wallet_scan_start")
+        try:
+            result = await self._wallet_scanner.scan()
+            self._latest_scan_result = result
+            self._last_wallet_scan = now
+
+            # Persist to database
+            if self._db:
+                import sqlite3
+                db_path = self.config.storage.sqlite_path
+                conn = sqlite3.connect(db_path)
+                try:
+                    save_scan_result(conn, result)
+                finally:
+                    conn.close()
+
+            log.info(
+                "engine.wallet_scan_complete",
+                wallets=result.wallets_scanned,
+                signals=len(result.conviction_signals),
+                deltas=len(result.deltas),
+            )
+        except Exception as e:
+            log.warning("engine.wallet_scan_error", error=str(e))
 
     def get_status(self) -> dict[str, Any]:
         dd_state = self.drawdown.state

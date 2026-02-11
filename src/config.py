@@ -198,6 +198,19 @@ class AlertsConfig(BaseModel):
     min_alert_interval_secs: int = 60
 
 
+class WalletScannerConfig(BaseModel):
+    """Whale / smart-money wallet scanner configuration."""
+    enabled: bool = True
+    scan_interval_minutes: int = 30
+    min_whale_count: int = 2       # min whales for conviction signal
+    min_conviction_score: float = 30.0
+    max_wallets: int = 20          # max wallets to track
+    conviction_edge_boost: float = 0.03  # boost edge by 3% when whales agree
+    conviction_edge_penalty: float = 0.02  # penalise edge when whales disagree
+    track_leaderboard: bool = True  # auto-track leaderboard wallets
+    custom_wallets: list[str] = Field(default_factory=list)  # user-added wallet addresses
+
+
 class EngineConfig(BaseModel):
     """Main trading engine configuration."""
     scan_interval_minutes: int = 15
@@ -226,6 +239,7 @@ class BotConfig(BaseModel):
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     alerts: AlertsConfig = Field(default_factory=AlertsConfig)
     engine: EngineConfig = Field(default_factory=EngineConfig)
+    wallet_scanner: WalletScannerConfig = Field(default_factory=WalletScannerConfig)
 
 
 def load_config(path: str | Path | None = None) -> BotConfig:
