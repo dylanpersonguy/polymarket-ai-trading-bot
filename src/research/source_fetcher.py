@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from src.config import ResearchConfig
+from src.config import ResearchConfig, CacheConfig
 from src.connectors.web_search import (
     SearchProvider,
     SearchResult,
@@ -28,6 +28,7 @@ from src.connectors.web_search import (
 )
 from src.observability.logger import get_logger
 from src.research.query_builder import SearchQuery
+from src.storage.cache import get_cache, make_cache_key
 
 log = get_logger(__name__)
 
@@ -50,6 +51,10 @@ class FetchedSource:
 
 class SourceFetcher:
     """Fetch and rank sources for a set of search queries."""
+
+    # Shared search cache (2-hour TTL by default)
+    _search_cache = get_cache("search", max_size_mb=50)
+    _SEARCH_TTL_SECS = 7200  # 2 hours
 
     def __init__(self, provider: SearchProvider, config: ResearchConfig):
         self._provider = provider
@@ -151,7 +156,26 @@ class SourceFetcher:
         return top
 
     async def _run_query(self, query: SearchQuery) -> list[SearchResult]:
-        return await self._provider.search(query.text, num_results=8)
+        # Check cache first
+        cache_key = make_cache_key("search", query.text)
+        cached = self._search_cache.get(cache_key)
+        if cached is not None:
+            log.debug("source_fetcher.cache_hit", query=query.text[:60])
+            return [SearchResult(**r) for r in cached]
+
+        # Primary queries get full results; secondary/contrarian get fewer
+        num = 5 if query.intent in ("primary", "statistics") else 3
+        results = await self._provider.search(query.text, num_results=num)
+
+        # Cache the results
+        serialisable = [
+            {"title": r.title, "url": r.url, "snippet": r.snippet,
+             "source": r.source, "date": r.date, "position": r.position,
+             "raw": r.raw}
+            for r in results
+        ]
+        self._search_cache.put(cache_key, serialisable, self._SEARCH_TTL_SECS)
+        return results
 
     async def fetch_page_content(self, url: str) -> str:
         """Fetch and extract readable text content from a URL using BeautifulSoup."""

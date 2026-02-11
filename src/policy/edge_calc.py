@@ -75,8 +75,8 @@ def calculate_edge(
     """
     raw_edge = model_prob - implied_prob
 
-    # Total round-trip cost as fraction of stake
-    total_cost_pct = transaction_fee_pct * 2  # entry + exit fees
+    # Single-leg cost — we hold to resolution, no exit trade
+    total_cost_pct = transaction_fee_pct  # entry fee only (hold-to-resolution)
     if stake_usd > 0:
         total_cost_pct += gas_cost_usd / stake_usd  # gas as % of stake
 

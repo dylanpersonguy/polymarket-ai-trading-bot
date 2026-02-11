@@ -150,6 +150,16 @@ def _hard_reject(market: Any, blocked_types: set[str] | None = None,
         if kw in q:
             return f"blocked_keyword:{kw}"
 
+    # Extreme implied probability — no realistic edge opportunity
+    prob = getattr(market, "best_bid", 0.5)
+    if prob < 0.05 or prob > 0.95:
+        return f"extreme_probability:{prob:.2f}"
+
+    # Very wide spread — illiquid, will eat into edge
+    spread = getattr(market, "spread", 1.0)
+    if spread > 0.20:
+        return f"wide_spread:{spread:.2f}"
+
     return None
 
 
@@ -185,14 +195,14 @@ def _score_market(market: Any, preferred_types: list[str] | None = None,
 
     # ── Implied probability sweet spot ───────────────────────────────
     prob = getattr(market, "best_bid", 0.5)
-    if prob < 0.03 or prob > 0.97:
-        breakdown["probability"] = -25
+    if prob < 0.08 or prob > 0.92:
+        breakdown["probability"] = -30  # near-certain → no edge opportunity
     elif 0.15 <= prob <= 0.85:
         breakdown["probability"] = 10
-    elif 0.05 <= prob <= 0.95:
+    elif 0.10 <= prob <= 0.90:
         breakdown["probability"] = 3
     else:
-        breakdown["probability"] = -10
+        breakdown["probability"] = -15
 
     # ── Time to expiry ───────────────────────────────────────────────
     import datetime as dt

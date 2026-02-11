@@ -412,11 +412,15 @@ class TradingEngine:
         source_fetcher = SourceFetcher(search_provider, self.config.research)
 
         try:
-            # Adaptive query budget from classifier
+            # Adaptive query budget from classifier — pass category + researchability
             max_q = classification.recommended_queries
-            queries = build_queries(market, max_queries=max_q)
+            queries = build_queries(
+                market, max_queries=max_q,
+                category=classification.category,
+                researchability=classification.researchability,
+            )
             sources = await source_fetcher.fetch_sources(
-                queries, market_type=market.market_type,
+                queries, market_type=classification.category or market.market_type,
                 max_sources=self.config.research.max_sources,
             )
             extractor = EvidenceExtractor(self.config.forecasting)
@@ -444,12 +448,56 @@ class TradingEngine:
         features = build_features(market=market, evidence=evidence)
 
         # ── Stage 3: Forecast ────────────────────────────────────────
-        from src.forecast.llm_forecaster import LLMForecaster
-        forecaster = LLMForecaster(self.config.forecasting)
-        forecast = await forecaster.forecast(
-            features=features, evidence=evidence,
-            resolution_source=market.resolution_source,
-        )
+        # Use ensemble forecaster when enabled, otherwise single-model
+        if self.config.ensemble.enabled:
+            from src.forecast.ensemble import EnsembleForecaster
+            ens_forecaster = EnsembleForecaster(
+                self.config.ensemble, self.config.forecasting,
+            )
+            ens_result = await ens_forecaster.forecast(
+                features=features, evidence=evidence,
+            )
+            # Adapt EnsembleResult into ForecastResult-like interface
+            from src.forecast.llm_forecaster import ForecastResult
+            forecast = ForecastResult(
+                market_id=market_id,
+                question=question,
+                market_type=market.market_type,
+                resolution_source=market.resolution_source,
+                implied_probability=features.implied_probability,
+                model_probability=ens_result.model_probability,
+                edge=ens_result.model_probability - features.implied_probability,
+                confidence_level=ens_result.confidence_level,
+                evidence=ens_result.key_evidence,
+                invalidation_triggers=ens_result.invalidation_triggers,
+                reasoning=ens_result.reasoning,
+                evidence_quality=evidence.quality_score,
+                num_sources=evidence.num_sources,
+                raw_llm_response={
+                    "ensemble": True,
+                    "models_succeeded": ens_result.models_succeeded,
+                    "models_failed": ens_result.models_failed,
+                    "spread": ens_result.spread,
+                    "agreement": ens_result.agreement_score,
+                    "aggregation": ens_result.aggregation_method,
+                },
+            )
+            # Apply low-evidence penalty (same logic as LLMForecaster)
+            if evidence.quality_score < self.config.forecasting.min_evidence_quality:
+                penalty = self.config.forecasting.low_evidence_penalty
+                old_prob = forecast.model_probability
+                forecast.model_probability = old_prob * (1 - penalty) + 0.5 * penalty
+                forecast.edge = forecast.model_probability - features.implied_probability
+                log.info("engine.ensemble_low_evidence_penalty",
+                         original=round(old_prob, 3),
+                         adjusted=round(forecast.model_probability, 3))
+        else:
+            from src.forecast.llm_forecaster import LLMForecaster
+            forecaster = LLMForecaster(self.config.forecasting)
+            forecast = await forecaster.forecast(
+                features=features, evidence=evidence,
+                resolution_source=market.resolution_source,
+            )
 
         # ── Adaptive model weights (learn per-category accuracy) ─────
         adaptive_result = None
@@ -486,6 +534,45 @@ class TradingEngine:
             transaction_fee_pct=self.config.risk.transaction_fee_pct,
             gas_cost_usd=self.config.risk.gas_cost_usd,
         )
+
+        # ── Stage 4b: Whale / Smart-Money Edge Adjustment ───────────
+        if (self.config.wallet_scanner.enabled
+                and self._latest_scan_result
+                and hasattr(self._latest_scan_result, "conviction_signals")):
+            whale_cfg = self.config.wallet_scanner
+            for sig in self._latest_scan_result.conviction_signals:
+                if getattr(sig, "market_id", None) != market_id:
+                    continue
+                whale_agrees = (
+                    (sig.direction == "BUY" and edge_result.direction == "BUY_YES")
+                    or (sig.direction == "SELL" and edge_result.direction == "BUY_NO")
+                )
+                if whale_agrees:
+                    boost = whale_cfg.conviction_edge_boost
+                    edge_result = calculate_edge(
+                        implied_prob=forecast.implied_probability,
+                        model_prob=min(0.99, forecast.model_probability + boost)
+                        if edge_result.direction == "BUY_YES"
+                        else forecast.model_probability,
+                        transaction_fee_pct=self.config.risk.transaction_fee_pct,
+                        gas_cost_usd=self.config.risk.gas_cost_usd,
+                    )
+                    log.info("engine.whale_edge_boost", market_id=market_id,
+                             boost=boost, new_edge=round(edge_result.abs_net_edge, 4))
+                else:
+                    penalty = whale_cfg.conviction_edge_penalty
+                    edge_result = calculate_edge(
+                        implied_prob=forecast.implied_probability,
+                        model_prob=max(0.01, forecast.model_probability - penalty)
+                        if edge_result.direction == "BUY_YES"
+                        else min(0.99, forecast.model_probability + penalty),
+                        transaction_fee_pct=self.config.risk.transaction_fee_pct,
+                        gas_cost_usd=self.config.risk.gas_cost_usd,
+                    )
+                    log.info("engine.whale_edge_penalty", market_id=market_id,
+                             penalty=penalty, new_edge=round(edge_result.abs_net_edge, 4))
+                break  # only apply first matching signal
+
         has_edge = edge_result.is_positive and edge_result.abs_net_edge >= self.config.risk.min_edge
         result["has_edge"] = has_edge
 

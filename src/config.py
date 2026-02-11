@@ -33,7 +33,7 @@ class ScanningConfig(BaseModel):
     # Pre-research filter settings
     filter_min_score: int = 45
     filter_blocked_types: list[str] = Field(default_factory=lambda: ["UNKNOWN"])
-    research_cooldown_minutes: int = 30
+    research_cooldown_minutes: int = 240
 
 
 class ResearchConfig(BaseModel):

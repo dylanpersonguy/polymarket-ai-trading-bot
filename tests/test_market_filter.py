@@ -131,13 +131,13 @@ def test_score_low_volume():
 def test_score_extreme_probability_low():
     m = FakeMarket(best_bid=0.01)
     score, bd = _score_market(m)
-    assert bd["probability"] == -25
+    assert bd["probability"] == -30
 
 
 def test_score_extreme_probability_high():
     m = FakeMarket(best_bid=0.99)
     score, bd = _score_market(m)
-    assert bd["probability"] == -25
+    assert bd["probability"] == -30
 
 
 def test_score_sweet_spot_probability():
@@ -343,8 +343,8 @@ def test_filter_markets_hard_rejects():
 
 
 def test_filter_markets_soft_rejects():
-    # Markets with terrible stats → low score
-    terrible = _make_markets(5, liquidity=100, volume=100, best_bid=0.01, spread=0.3)
+    # Markets with terrible stats → low score (but not hard-rejected)
+    terrible = _make_markets(5, liquidity=100, volume=100, best_bid=0.07, spread=0.18)
     passed, stats = filter_markets(terrible, min_score=60, max_pass=10)
     assert stats.soft_rejected > 0
 
@@ -414,3 +414,41 @@ def test_blocked_keywords_are_lowercase():
 def test_preferred_keywords_are_lowercase():
     for kw in PREFERRED_KEYWORDS:
         assert kw == kw.lower(), f"Preferred keyword should be lowercase: {kw}"
+
+
+# ═════════════════════════════════════════════════════════════════════
+#  Hard rejection: extreme probability & wide spread
+# ═════════════════════════════════════════════════════════════════════
+
+
+def test_hard_reject_extreme_probability_low():
+    m = FakeMarket(best_bid=0.03)
+    reason = _hard_reject(m)
+    assert reason is not None
+    assert "extreme_probability" in reason
+
+
+def test_hard_reject_extreme_probability_high():
+    m = FakeMarket(best_bid=0.97)
+    reason = _hard_reject(m)
+    assert reason is not None
+    assert "extreme_probability" in reason
+
+
+def test_pass_normal_probability():
+    m = FakeMarket(best_bid=0.50)
+    reason = _hard_reject(m)
+    assert reason is None
+
+
+def test_hard_reject_wide_spread():
+    m = FakeMarket(spread=0.25)
+    reason = _hard_reject(m)
+    assert reason is not None
+    assert "wide_spread" in reason
+
+
+def test_pass_normal_spread():
+    m = FakeMarket(spread=0.04)
+    reason = _hard_reject(m)
+    assert reason is None

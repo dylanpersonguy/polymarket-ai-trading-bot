@@ -76,7 +76,6 @@ You are an expert probabilistic forecaster analyzing a prediction market.
 
 MARKET QUESTION: {question}
 MARKET TYPE: {market_type}
-IMPLIED PROBABILITY (from market price): {implied_prob:.1%}
 
 EVIDENCE SUMMARY:
 {evidence_summary}
@@ -96,7 +95,11 @@ MARKET FEATURES:
 - Sources analyzed: {num_sources}
 
 TASK:
-Produce a probability forecast. Return valid JSON:
+Based ONLY on the evidence above, produce an independent probability
+estimate for the question. Do NOT try to guess or anchor to any market
+price — form your own view from the evidence.
+
+Return valid JSON:
 {{
   "model_probability": <0.01-0.99>,
   "confidence_level": "LOW" | "MEDIUM" | "HIGH",
@@ -117,6 +120,8 @@ Produce a probability forecast. Return valid JSON:
 
 RULES:
 - Your probability must be between 0.01 and 0.99 (never 0 or 1).
+- Form your estimate independently from evidence — do NOT anchor to any
+  external price or implied probability.
 - If evidence is weak (quality < 0.3), bias toward 0.50 (maximum uncertainty).
 - If evidence contradicts itself, widen uncertainty toward 0.50.
 - confidence_level:
@@ -164,7 +169,6 @@ class LLMForecaster:
         prompt = _FORECAST_PROMPT.format(
             question=features.question,
             market_type=features.market_type,
-            implied_prob=features.implied_probability,
             evidence_summary=evidence.summary or "No summary available.",
             evidence_bullets=evidence_bullets,
             contradictions_block=contradictions_block,

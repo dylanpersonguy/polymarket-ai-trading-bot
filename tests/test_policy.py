@@ -95,6 +95,25 @@ class TestEdgeCalc:
         result = calculate_edge(implied_prob=0.80, model_prob=0.30)
         assert result.abs_edge == pytest.approx(0.50, abs=0.01)
 
+    def test_hold_to_resolution_single_fee(self) -> None:
+        """Transaction cost should be single-leg (hold to resolution, no exit trade)."""
+        result = calculate_edge(
+            implied_prob=0.50, model_prob=0.60,
+            transaction_fee_pct=0.02, gas_cost_usd=0.0,
+        )
+        # raw_edge = 0.10, cost = 0.02 (single leg), net_edge = 0.08
+        assert result.abs_net_edge == pytest.approx(0.08, abs=0.005)
+
+    def test_net_edge_not_double_counted(self) -> None:
+        """Ensure cost is NOT doubled (old bug: cost * 2)."""
+        result = calculate_edge(
+            implied_prob=0.50, model_prob=0.55,
+            transaction_fee_pct=0.02, gas_cost_usd=0.0,
+        )
+        # raw_edge = 0.05, cost = 0.02, net_edge = 0.03 (NOT 0.01)
+        assert result.abs_net_edge == pytest.approx(0.03, abs=0.005)
+        assert result.is_positive is True
+
 
 # ─── risk limits ────────────────────────────────────────────────────────
 
