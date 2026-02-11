@@ -434,22 +434,55 @@ async function updateEngineStatus() {
     const d = await apiFetch('/api/engine-status');
     if (!d) return;
     const statusEl = $('#engine-status');
-    statusEl.textContent = d.running ? 'RUNNING' : 'OFF';
-    statusEl.className   = `card-value ${d.running ? 'pnl-positive' : 'pnl-zero'}`;
+    const isRunning = d.running;
+    statusEl.textContent = isRunning ? 'RUNNING' : 'OFF';
+    statusEl.className   = `card-value ${isRunning ? 'pnl-positive' : 'pnl-zero'}`;
     $('#engine-cycles').textContent = `Cycles: ${d.cycles || 0}`;
 
     const engineBadge = $('#engine-badge');
-    if (d.running) {
+    if (isRunning) {
         engineBadge.textContent = '🟢 ENGINE ON'; engineBadge.className = 'badge badge-ok'; engineBadge.style.display = '';
     } else {
         engineBadge.textContent = '⚫ ENGINE OFF'; engineBadge.className = 'badge badge-paper'; engineBadge.style.display = '';
     }
 
+    // Toggle start/stop buttons
+    const btnStart = document.getElementById('btn-engine-start');
+    const btnStop  = document.getElementById('btn-engine-stop');
+    if (btnStart && btnStop) {
+        btnStart.style.display = isRunning ? 'none' : '';
+        btnStop.style.display  = isRunning ? '' : 'none';
+    }
+
     // Show last cycle info if available
     if (d.last_cycle) {
         const lc = d.last_cycle;
-        $('#engine-cycles').textContent =
-            `Cycles: ${d.cycles || 0} | Last: ${lc.markets_scanned||0} scanned, ${lc.edges_found||0} edges, ${lc.trades_executed||0} trades (${lc.duration_secs||0}s)`;
+        let info = `Cycles: ${d.cycles || 0} | Last: ${lc.markets_scanned||0} scanned, ${lc.edges_found||0} edges, ${lc.trades_executed||0} trades (${lc.duration_secs||0}s)`;
+        if (d.uptime_secs) {
+            const mins = Math.floor(d.uptime_secs / 60);
+            info += ` | Up ${mins}m`;
+        }
+        $('#engine-cycles').textContent = info;
+    }
+
+    // Show error if engine crashed
+    if (d.engine_error && !isRunning) {
+        $('#engine-cycles').textContent = `⚠️ Error: ${d.engine_error.substring(0, 80)}`;
+    }
+}
+
+async function toggleEngine(start) {
+    const url = start ? '/api/engine/start' : '/api/engine/stop';
+    try {
+        const resp = await fetch(url, { method: 'POST' });
+        const data = await resp.json();
+        if (data.message) {
+            console.log('Engine:', data.message);
+        }
+        // Refresh status after a brief delay to let the engine start/stop
+        setTimeout(updateEngineStatus, 1000);
+    } catch (e) {
+        console.error('Engine toggle error:', e);
     }
 }
 

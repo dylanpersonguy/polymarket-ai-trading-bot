@@ -7,17 +7,28 @@ Serves a single-page dashboard at http://localhost:2345 with:
   - Trade history
   - Risk monitor (limits vs current values)
   - System health & metrics
+  - Embedded trading engine with start/stop controls
 
 All data is read from the SQLite database and in-process metrics.
+The trading engine runs in a background thread alongside the dashboard.
 """
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import json
 import sqlite3
+import threading
+import time
 from pathlib import Path
 from typing import Any
+
+from dotenv import load_dotenv
+
+# Load .env from project root (explicit path for reliability)
+_project_root = Path(__file__).resolve().parent.parent.parent
+load_dotenv(_project_root / ".env", override=True)
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
@@ -38,6 +49,59 @@ app = Flask(
 
 _config: BotConfig | None = None
 _db_path: str = "data/bot.db"
+
+# ─── Embedded Engine ────────────────────────────────────────────────
+
+_engine_thread: threading.Thread | None = None
+_engine_instance: Any = None
+_engine_loop: asyncio.AbstractEventLoop | None = None
+_engine_started_at: float = 0.0
+_engine_error: str | None = None
+
+
+def _engine_worker(cfg: BotConfig) -> None:
+    """Run the TradingEngine in a dedicated thread with its own event loop."""
+    global _engine_instance, _engine_loop, _engine_started_at, _engine_error
+    from src.engine.loop import TradingEngine
+
+    _engine_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(_engine_loop)
+
+    _engine_instance = TradingEngine(config=cfg)
+    _engine_started_at = time.time()
+    _engine_error = None
+
+    try:
+        _engine_loop.run_until_complete(_engine_instance.start())
+    except Exception as e:
+        _engine_error = str(e)
+        import traceback
+        traceback.print_exc()
+    finally:
+        _engine_loop.close()
+        _engine_loop = None
+
+
+def _start_engine(cfg: BotConfig) -> bool:
+    """Start the engine in a background thread.  Returns True on success."""
+    global _engine_thread, _engine_error
+    if _engine_thread and _engine_thread.is_alive():
+        return False  # already running
+    _engine_error = None
+    _engine_thread = threading.Thread(
+        target=_engine_worker, args=(cfg,), daemon=True, name="trading-engine",
+    )
+    _engine_thread.start()
+    return True
+
+
+def _stop_engine() -> bool:
+    """Ask the engine to stop gracefully."""
+    global _engine_instance
+    if _engine_instance and _engine_instance.is_running:
+        _engine_instance.stop()
+        return True
+    return False
 
 
 def _get_config() -> BotConfig:
@@ -495,6 +559,36 @@ def api_portfolio_risk() -> Any:
 @app.route("/api/engine-status")
 def api_engine() -> Any:
     cfg = _get_config()
+
+    # Prefer live in-process engine status
+    engine_running = (
+        _engine_instance is not None
+        and _engine_instance.is_running
+        and _engine_thread is not None
+        and _engine_thread.is_alive()
+    )
+
+    if engine_running and _engine_instance is not None:
+        try:
+            live = _engine_instance.get_status()
+            return jsonify({
+                "running": True,
+                "scan_interval_minutes": cfg.engine.scan_interval_minutes,
+                "max_markets_per_cycle": cfg.engine.max_markets_per_cycle,
+                "auto_start": cfg.engine.auto_start,
+                "paper_mode": cfg.engine.paper_mode,
+                "cycles": live.get("cycle_count", 0),
+                "last_cycle": live.get("last_cycle"),
+                "live_trading": live.get("live_trading", False),
+                "positions": live.get("positions", 0),
+                "uptime_secs": round(time.time() - _engine_started_at, 0),
+                "engine_embedded": True,
+                "engine_error": _engine_error,
+            })
+        except Exception:
+            pass
+
+    # Fall back to DB-persisted state
     conn = _get_conn()
     _ensure_tables(conn)
     try:
@@ -513,6 +607,8 @@ def api_engine() -> Any:
                 "last_cycle": state.get("last_cycle"),
                 "live_trading": state.get("live_trading", False),
                 "positions": state.get("positions", 0),
+                "engine_embedded": True,
+                "engine_error": _engine_error,
             })
     except Exception:
         pass
@@ -527,7 +623,28 @@ def api_engine() -> Any:
         "paper_mode": cfg.engine.paper_mode,
         "cycles": 0,
         "last_cycle": None,
+        "engine_embedded": True,
+        "engine_error": _engine_error,
     })
+
+
+# ─── API: Engine Start / Stop ───────────────────────────────────
+
+@app.route("/api/engine/start", methods=["POST"])
+def api_engine_start() -> Any:
+    """Start the trading engine in a background thread."""
+    cfg = _get_config()
+    if _engine_thread and _engine_thread.is_alive():
+        return jsonify({"ok": False, "message": "Engine is already running."})
+    ok = _start_engine(cfg)
+    return jsonify({"ok": ok, "message": "Engine starting…" if ok else "Failed to start."})
+
+
+@app.route("/api/engine/stop", methods=["POST"])
+def api_engine_stop() -> Any:
+    """Gracefully stop the trading engine."""
+    ok = _stop_engine()
+    return jsonify({"ok": ok, "message": "Engine stopping…" if ok else "Engine is not running."})
 
 
 # ─── API: Alerts History ────────────────────────────────────────
@@ -1382,8 +1499,9 @@ def run_dashboard(
     host: str = "127.0.0.1",
     port: int = 2345,
     debug: bool = False,
+    start_engine: bool = True,
 ) -> None:
-    """Start the dashboard Flask server."""
+    """Start the dashboard Flask server and optionally the trading engine."""
     global _config, _db_path
 
     _config = load_config(config_path)
@@ -1398,6 +1516,17 @@ def run_dashboard(
     conn.close()
 
     print(f"\n  🚀 Polymarket Bot Dashboard")
-    print(f"  ➜  http://{host}:{port}\n")
+    print(f"  ➜  http://{host}:{port}")
 
+    # Auto-start the trading engine in a background thread
+    if start_engine:
+        print(f"  🤖 Trading engine auto-starting in background…")
+        print(f"     Cycle interval: {_config.engine.cycle_interval_secs}s")
+        print(f"     Paper mode: {_config.engine.paper_mode}")
+        print(f"     Live trading: {is_live_trading_enabled()}")
+        _start_engine(_config)
+    else:
+        print(f"  ⚠️  Engine not auto-started (use dashboard button to start)")
+
+    print()
     app.run(host=host, port=port, debug=debug)

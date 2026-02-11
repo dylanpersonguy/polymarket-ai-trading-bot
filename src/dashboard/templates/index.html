@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Polymarket Bot — Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css?v=9">
+    <link rel="stylesheet" href="/static/style.css?v=10">
 </head>
 <body>
     <!-- ─── Toast Container ─────────────────────────────────── -->
@@ -231,6 +231,10 @@
             <div class="card-label">Engine Status</div>
             <div class="card-value" id="engine-status">OFF</div>
             <div class="card-sub" id="engine-cycles">Cycles: 0</div>
+            <div class="card-sub" style="margin-top:6px;">
+                <button class="btn btn-ok" id="btn-engine-start" onclick="toggleEngine(true)" style="font-size:0.75rem;">▶ Start</button>
+                <button class="btn btn-danger" id="btn-engine-stop" onclick="toggleEngine(false)" style="font-size:0.75rem;display:none;">⏹ Stop</button>
+            </div>
         </div>
         <div class="card accent-pink">
             <div class="card-label">Drawdown</div>
@@ -491,6 +495,6 @@
         <span>Auto-refreshes every 15s</span>
     </footer>
 
-    <script src="/static/dashboard.js?v=9"></script>
+    <script src="/static/dashboard.js?v=10"></script>
 </body>
 </html>

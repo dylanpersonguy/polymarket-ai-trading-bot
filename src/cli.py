@@ -410,9 +410,10 @@ def trade(ctx: click.Context, live: bool) -> None:
 @click.option("--host", default="127.0.0.1", help="Host to bind to")
 @click.option("--port", default=2345, help="Port to listen on")
 @click.option("--debug", is_flag=True, help="Enable Flask debug mode")
+@click.option("--no-engine", is_flag=True, help="Don't auto-start the trading engine")
 @click.pass_context
-def dashboard(ctx: click.Context, host: str, port: int, debug: bool) -> None:
-    """Launch the monitoring dashboard web UI."""
+def dashboard(ctx: click.Context, host: str, port: int, debug: bool, no_engine: bool) -> None:
+    """Launch the monitoring dashboard web UI (with embedded trading engine)."""
     from src.dashboard.app import run_dashboard
 
     run_dashboard(
@@ -420,6 +421,7 @@ def dashboard(ctx: click.Context, host: str, port: int, debug: bool) -> None:
         host=host,
         port=port,
         debug=debug,
+        start_engine=not no_engine,
     )
 
 
