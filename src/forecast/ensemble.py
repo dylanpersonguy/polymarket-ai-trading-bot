@@ -26,6 +26,7 @@ from src.config import EnsembleConfig, ForecastingConfig
 from src.forecast.feature_builder import MarketFeatures
 from src.research.evidence_extractor import EvidencePackage
 from src.observability.logger import get_logger
+from src.connectors.rate_limiter import rate_limiter
 
 log = get_logger(__name__)
 
@@ -171,6 +172,7 @@ async def _query_openai(model: str, prompt: str, config: ForecastingConfig) -> M
 
     start = time.monotonic()
     try:
+        await rate_limiter.get("openai").acquire()
         client = AsyncOpenAI()
         resp = await asyncio.wait_for(
             client.chat.completions.create(
@@ -210,6 +212,7 @@ async def _query_anthropic(model: str, prompt: str, config: ForecastingConfig) -
     start = time.monotonic()
     try:
         import anthropic
+        await rate_limiter.get("anthropic").acquire()
         client = anthropic.AsyncAnthropic()
         resp = await asyncio.wait_for(
             client.messages.create(
@@ -247,6 +250,7 @@ async def _query_google(model: str, prompt: str, config: ForecastingConfig) -> M
     start = time.monotonic()
     try:
         import google.generativeai as genai
+        await rate_limiter.get("google").acquire()
         genai.configure(api_key=os.environ.get("GOOGLE_API_KEY", ""))
         gmodel = genai.GenerativeModel(model)
         resp = await asyncio.to_thread(

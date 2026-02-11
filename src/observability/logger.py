@@ -7,6 +7,7 @@ All log output is JSON-formatted for machine parsing in production.
 from __future__ import annotations
 
 import logging
+import logging.handlers
 import os
 import sys
 from pathlib import Path
@@ -58,11 +59,15 @@ def configure_logging(
     console.setLevel(log_level)
     root.addHandler(console)
 
-    # File handler (optional)
+    # File handler with rotation (optional)
     if log_file:
         log_path = Path(log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        fh = logging.FileHandler(str(log_path))
+        fh = logging.handlers.RotatingFileHandler(
+            str(log_path),
+            maxBytes=10 * 1024 * 1024,  # 10 MB per file
+            backupCount=5,              # Keep 5 rotated files
+        )
         fh.setLevel(log_level)
         root.addHandler(fh)
 

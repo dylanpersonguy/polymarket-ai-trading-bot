@@ -188,6 +188,7 @@ class AlertsConfig(BaseModel):
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     discord_webhook_url: str = ""
+    slack_webhook_url: str = ""
     alert_on_trade: bool = True
     alert_on_risk_breach: bool = True
     alert_on_drawdown_warning: bool = True
@@ -196,6 +197,19 @@ class AlertsConfig(BaseModel):
     daily_summary_enabled: bool = True
     daily_summary_hour: int = 18
     min_alert_interval_secs: int = 60
+    min_alert_level: str = "info"  # info | warning | critical
+
+    @property
+    def telegram_token(self) -> str:
+        return self.telegram_bot_token
+
+    @property
+    def discord_webhook(self) -> str:
+        return self.discord_webhook_url
+
+    @property
+    def slack_webhook(self) -> str:
+        return self.slack_webhook_url
 
 
 class WalletScannerConfig(BaseModel):

@@ -8,13 +8,27 @@ services:
     container_name: polymarket-bot
     env_file:
       - .env
+    ports:
+      - "2345:2345"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./reports:/app/reports
       - ./config.yaml:/app/config.yaml:ro
-    restart: "no"
-    # Override CMD to run the scan loop, or any command:
-    # docker compose run bot scan --limit 20
-    # docker compose run bot forecast <CONDITION_ID>
-    command: ["scan", "--limit", "10"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:2345/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+    # Default: run dashboard with embedded engine
+    command: ["dashboard"]
+    # Override CMD for other commands:
+    #   docker compose run bot scan --limit 20
+    #   docker compose run bot forecast <CONDITION_ID>

@@ -53,7 +53,7 @@ class AlertManager:
         self.alerts_config = cfg.alerts
         self._history: list[Alert] = []
         self._cooldowns: dict[str, float] = {}
-        self._min_level = self.alerts_config.min_alert_level
+        self._min_level = getattr(self.alerts_config, "min_alert_level", "info")
 
     async def send(
         self,

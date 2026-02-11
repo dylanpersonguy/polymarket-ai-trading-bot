@@ -19,6 +19,7 @@ from src.config import ForecastingConfig
 from src.forecast.feature_builder import MarketFeatures
 from src.research.evidence_extractor import EvidencePackage
 from src.observability.logger import get_logger
+from src.connectors.rate_limiter import rate_limiter
 
 log = get_logger(__name__)
 
@@ -182,6 +183,7 @@ class LLMForecaster:
         )
 
         try:
+            await rate_limiter.get("openai").acquire()
             resp = await self._llm.chat.completions.create(
                 model=self._config.llm_model,
                 temperature=self._config.llm_temperature,

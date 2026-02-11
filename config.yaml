@@ -1,0 +1,128 @@
+# ─── Polymarket Bot Configuration ────────────────────────────────────
+# All settings have sensible defaults in src/config.py.
+# Override only what you need here. Delete or comment out the rest.
+# The engine hot-reloads this file — changes take effect next cycle.
+
+scanning:
+  min_volume_usd: 5000
+  min_liquidity_usd: 1000
+  max_spread: 0.05
+  max_days_to_expiry: 90
+  batch_size: 50
+  preferred_types:
+    - MACRO
+    - ELECTION
+    - CORPORATE
+  restricted_types:
+    - WEATHER
+    - SPORTS
+  filter_min_score: 45
+  filter_blocked_types:
+    - UNKNOWN
+  research_cooldown_minutes: 240
+
+research:
+  max_sources: 10
+  source_timeout_secs: 15
+  search_provider: serpapi          # serpapi | bing | tavily
+  fetch_full_content: true
+  max_content_length: 15000
+  content_fetch_top_n: 5
+  min_corroborating_sources: 2
+  stale_days_penalty_threshold: 7
+  stale_days_heavy_penalty: 30
+
+forecasting:
+  llm_model: gpt-4o
+  llm_temperature: 0.2
+  llm_max_tokens: 4096
+  low_evidence_penalty: 0.15
+  min_evidence_quality: 0.3
+
+ensemble:
+  enabled: true
+  models:
+    - gpt-4o
+    - claude-3-5-sonnet-20241022
+    - gemini-1.5-pro
+  aggregation: trimmed_mean        # trimmed_mean | median | weighted
+  min_models_required: 2
+  fallback_model: gpt-4o
+  timeout_per_model_secs: 30
+
+risk:
+  max_stake_per_market: 100.0
+  max_daily_loss: 500.0
+  max_open_positions: 10
+  min_edge: 0.05
+  min_liquidity: 500.0
+  max_spread: 0.04
+  kelly_fraction: 0.25
+  max_bankroll_fraction: 0.05
+  bankroll: 5000.0
+  transaction_fee_pct: 0.02
+  gas_cost_usd: 0.01
+
+drawdown:
+  enabled: true
+  max_drawdown_pct: 0.20
+  warning_drawdown_pct: 0.10
+  critical_drawdown_pct: 0.15
+  auto_kill_at_max: true
+
+portfolio:
+  max_category_exposure_pct: 0.35
+  max_single_event_exposure_pct: 0.25
+  max_correlated_positions: 4
+
+execution:
+  dry_run: true                    # Set false + ENABLE_LIVE_TRADING=true for real trades
+  default_order_type: limit
+  slippage_tolerance: 0.01
+  max_retries: 3
+
+storage:
+  db_type: sqlite
+  sqlite_path: data/bot.db
+
+cache:
+  enabled: true
+  search_ttl_secs: 3600
+  max_cache_size_mb: 100
+
+observability:
+  log_level: INFO
+  log_format: json                 # json | console
+  log_file: logs/bot.log
+  enable_metrics: true
+
+alerts:
+  enabled: false
+  min_alert_level: info            # info | warning | critical
+  # telegram_bot_token: ""
+  # telegram_chat_id: ""
+  # discord_webhook_url: ""
+  # slack_webhook_url: ""
+  alert_on_trade: true
+  alert_on_risk_breach: true
+  alert_on_drawdown_warning: true
+  alert_on_system_error: true
+  alert_on_kill_switch: true
+  daily_summary_enabled: true
+  daily_summary_hour: 18
+
+wallet_scanner:
+  enabled: true
+  scan_interval_minutes: 30
+  min_whale_count: 2
+  min_conviction_score: 30.0
+  max_wallets: 20
+  conviction_edge_boost: 0.03
+  conviction_edge_penalty: 0.02
+
+engine:
+  scan_interval_minutes: 15
+  max_markets_per_cycle: 5
+  auto_start: false
+  paper_mode: true                 # Set false for live trading
+  cycle_interval_secs: 300

@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import json
+import os
 import sqlite3
 import threading
 import time
@@ -36,6 +37,10 @@ import yaml
 
 from src.config import BotConfig, load_config, is_live_trading_enabled
 from src.observability.metrics import metrics
+from src.observability.sentry_integration import init_sentry
+
+# Initialise Sentry if SENTRY_DSN is set
+init_sentry()
 
 # ─── Flask app ──────────────────────────────────────────────────────
 
@@ -164,6 +169,94 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
             created_at TEXT DEFAULT (datetime('now'))
         );
     """)
+
+
+# ─── Dashboard Authentication ──────────────────────────────────────
+
+_DASHBOARD_API_KEY = os.environ.get("DASHBOARD_API_KEY", "")
+
+
+def _check_auth() -> bool:
+    """Check if request is authenticated. Returns True if auth passes."""
+    if not _DASHBOARD_API_KEY:
+        return True  # No auth configured — open access
+    # Accept via header or query param
+    token = request.headers.get("X-API-Key") or request.args.get("api_key", "")
+    return token == _DASHBOARD_API_KEY
+
+
+@app.before_request
+def _require_auth():
+    """Enforce auth on all routes except health checks."""
+    # Health and readiness probes are always open
+    if request.path in ("/health", "/ready", "/metrics"):
+        return None
+    if not _check_auth():
+        return jsonify({"error": "unauthorized", "message": "Set X-API-Key header or ?api_key= param"}), 401
+    return None
+
+
+# ─── Health & Readiness ────────────────────────────────────────────
+
+@app.route("/health")
+def health() -> Any:
+    """Liveness probe — returns 200 if the Flask process is up."""
+    return jsonify({"status": "ok", "service": "polymarket-bot"})
+
+
+@app.route("/ready")
+def ready() -> Any:
+    """Readiness probe — checks DB connectivity and engine state."""
+    checks: dict[str, Any] = {"db": False, "engine": False}
+    try:
+        conn = _get_conn()
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+        checks["db"] = True
+    except Exception as e:
+        checks["db_error"] = str(e)
+
+    checks["engine"] = bool(_engine_instance and _engine_instance.is_running)
+    all_ok = checks["db"]  # Engine not required to be ready
+    status_code = 200 if all_ok else 503
+    return jsonify({"status": "ready" if all_ok else "not_ready", "checks": checks}), status_code
+
+
+# ─── Prometheus Metrics ─────────────────────────────────────────────
+
+@app.route("/metrics")
+def prometheus_metrics() -> Any:
+    """Expose metrics in Prometheus text exposition format."""
+    from src.connectors.rate_limiter import rate_limiter as _rl
+
+    snap = metrics.snapshot()
+    lines: list[str] = []
+
+    # Counters
+    for name, value in snap.get("counters", {}).items():
+        safe = name.replace(".", "_").replace("-", "_")
+        lines.append(f"# TYPE bot_{safe} counter")
+        lines.append(f"bot_{safe} {value}")
+
+    # Gauges
+    for name, value in snap.get("gauges", {}).items():
+        safe = name.replace(".", "_").replace("-", "_")
+        lines.append(f"# TYPE bot_{safe} gauge")
+        lines.append(f"bot_{safe} {value}")
+
+    # Rate limiter stats
+    for endpoint, stats in _rl.stats().items():
+        safe = endpoint.replace(".", "_").replace("-", "_")
+        lines.append(f'bot_rate_limiter_requests_total{{endpoint="{safe}"}} {stats["total_requests"]}')
+        lines.append(f'bot_rate_limiter_waits_total{{endpoint="{safe}"}} {stats["total_waits"]}')
+
+    # Engine cycle gauge
+    if _engine_instance:
+        lines.append(f"bot_engine_cycles_total {_engine_instance._cycle_count}")
+        lines.append(f"bot_engine_running {1 if _engine_instance.is_running else 0}")
+
+    body = "\n".join(lines) + "\n"
+    return body, 200, {"Content-Type": "text/plain; charset=utf-8"}
 
 
 # ─── Pages ──────────────────────────────────────────────────────────

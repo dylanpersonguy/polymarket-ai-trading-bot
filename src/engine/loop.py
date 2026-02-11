@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import signal
 import time
 import traceback
 import uuid
@@ -170,6 +171,14 @@ class TradingEngine:
         )
         self._persist_engine_state()
 
+        # Graceful shutdown on SIGTERM / SIGINT
+        loop = asyncio.get_event_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                loop.add_signal_handler(sig, self._handle_signal, sig)
+            except NotImplementedError:
+                pass  # Windows doesn't support add_signal_handler
+
         while self._running:
             try:
                 await self._run_cycle()
@@ -191,6 +200,11 @@ class TradingEngine:
     def stop(self) -> None:
         log.info("engine.stop_requested")
         self._running = False
+
+    def _handle_signal(self, sig: signal.Signals) -> None:
+        """Handle SIGTERM/SIGINT for graceful shutdown."""
+        log.info("engine.signal_received", signal=sig.name)
+        self.stop()
 
     # ── Cycle ────────────────────────────────────────────────────────
 

@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.observability.logger import get_logger
+from src.connectors.rate_limiter import rate_limiter
 
 log = get_logger(__name__)
 
@@ -137,6 +138,7 @@ class GammaClient:
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        await rate_limiter.get("gamma").acquire()
         resp = await self._client.get(path, params=params)
         resp.raise_for_status()
         return resp.json()

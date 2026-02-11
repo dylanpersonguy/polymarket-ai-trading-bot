@@ -1,12 +1,32 @@
+# ── Secrets ──────────────────────────────────────────────────────────
 .env
+.env.local
+.env.*.local
+
+# ── Python ──────────────────────────────────────────────────────────
 *.pyc
 __pycache__/
+*.egg-info/
+dist/
+build/
+.venv/
+
+# ── Data ────────────────────────────────────────────────────────────
 data/
 logs/
 reports/
-dist/
-*.egg-info/
+
+# ── Caches ──────────────────────────────────────────────────────────
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
-.venv/
+.coverage
+htmlcov/
+
+# ── IDE ─────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
