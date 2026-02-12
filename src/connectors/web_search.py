@@ -86,13 +86,29 @@ class SearchProvider(abc.ABC):
 # ── SerpAPI Provider ─────────────────────────────────────────────────
 
 class SerpAPIProvider(SearchProvider):
-    """Google search via SerpAPI."""
+    """Google search via SerpAPI with automatic key rotation."""
 
     def __init__(self, api_key: str | None = None):
-        self._key = api_key or os.environ.get("SERPAPI_KEY", "")
-        if not self._key:
+        raw = api_key or os.environ.get("SERPAPI_KEY", "")
+        self._keys = [k.strip() for k in raw.split(",") if k.strip()]
+        if not self._keys:
             log.warning("serpapi.no_key", msg="SERPAPI_KEY not set; searches will fail")
+            self._keys = [""]
+        self._key_index = 0
         self._client = httpx.AsyncClient(timeout=20.0)
+
+    @property
+    def _key(self) -> str:
+        return self._keys[self._key_index]
+
+    def _rotate_key(self) -> bool:
+        """Rotate to next key. Returns True if a new key is available."""
+        next_idx = self._key_index + 1
+        if next_idx < len(self._keys):
+            self._key_index = next_idx
+            log.info("serpapi.key_rotated", key_index=next_idx, total_keys=len(self._keys))
+            return True
+        return False
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -109,6 +125,18 @@ class SerpAPIProvider(SearchProvider):
                 "engine": "google",
             },
         )
+        # On rate limit, try rotating to next key before raising
+        if resp.status_code == 429 and self._rotate_key():
+            log.warning("serpapi.rate_limited", msg="Retrying with rotated key")
+            resp = await self._client.get(
+                "https://serpapi.com/search.json",
+                params={
+                    "q": query,
+                    "api_key": self._key,
+                    "num": num_results,
+                    "engine": "google",
+                },
+            )
         resp.raise_for_status()
         data = resp.json()
         results: list[SearchResult] = []

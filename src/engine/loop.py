@@ -208,8 +208,8 @@ class TradingEngine:
         for sig in (signal.SIGTERM, signal.SIGINT):
             try:
                 loop.add_signal_handler(sig, self._handle_signal, sig)
-            except NotImplementedError:
-                pass  # Windows doesn't support add_signal_handler
+            except (NotImplementedError, RuntimeError):
+                pass  # Windows or non-main thread (e.g. dashboard)
 
         # Start WebSocket price feed in background
         try:
