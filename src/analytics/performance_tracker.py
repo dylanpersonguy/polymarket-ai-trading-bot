@@ -210,6 +210,13 @@ class PerformanceTracker:
             self._compute_equity_curve(conn, snap)
             self._compute_rolling_windows(conn, snap)
             self._compute_model_accuracy(conn, snap)
+
+            # Fallback: when performance_log is empty (paper trading, no
+            # resolved positions yet), compute analytics from open positions
+            # so the dashboard still shows useful data.
+            if snap.total_trades == 0:
+                self._compute_from_open_positions(conn, snap)
+
             self._build_leaderboard(snap)
         except Exception as e:
             log.error("performance_tracker.compute_error", error=str(e))
@@ -471,6 +478,222 @@ class PerformanceTracker:
                 avg_error=float(r["avg_error"] or 0),
                 brier_score=float(r["brier"] or 0),
             ))
+
+    # ── Open-Position Fallback (Paper Trading) ─────────────────────
+
+    def _compute_from_open_positions(
+        self, conn: sqlite3.Connection, snap: PerformanceSnapshot
+    ) -> None:
+        """Fallback analytics from open positions when performance_log is empty.
+
+        This gives paper-trading users meaningful analytics even before any
+        positions have resolved.  Metrics are based on *unrealised* P&L.
+        """
+        # Fetch positions joined with the most recent forecast per market
+        rows = self._query_safe(conn, """
+            SELECT p.market_id, p.direction, p.entry_price, p.current_price,
+                   p.pnl, p.stake_usd, p.opened_at,
+                   f.market_type, f.edge, f.evidence_quality,
+                   f.model_probability, f.implied_probability
+            FROM positions p
+            LEFT JOIN forecasts f ON p.market_id = f.market_id
+                AND f.created_at = (
+                    SELECT MAX(f2.created_at) FROM forecasts f2
+                    WHERE f2.market_id = p.market_id
+                )
+        """)
+
+        if not rows:
+            return
+
+        # ── Trade-level metrics ──────────────────────────────────
+        pnls: list[float] = []
+        stakes: list[float] = []
+        wins = 0
+        losses = 0
+        gross_profit = 0.0
+        gross_loss = 0.0
+        total_edge = 0.0
+        current_streak = 0
+        best_streak = 0
+        worst_streak = 0
+
+        # Category buckets
+        cat_data: dict[str, list[dict[str, Any]]] = {}
+
+        for r in rows:
+            pnl = float(r["pnl"] or 0)
+            stake = float(r["stake_usd"] or 0)
+            edge = float(r["edge"] or 0)
+            cat = r["market_type"] or "UNKNOWN"
+            eq = float(r["evidence_quality"] or 0)
+
+            pnls.append(pnl)
+            stakes.append(stake)
+            total_edge += edge
+
+            if pnl > 0:
+                wins += 1
+                gross_profit += pnl
+                current_streak = current_streak + 1 if current_streak >= 0 else 1
+                best_streak = max(best_streak, current_streak)
+            elif pnl < 0:
+                losses += 1
+                gross_loss += abs(pnl)
+                current_streak = current_streak - 1 if current_streak <= 0 else -1
+                worst_streak = min(worst_streak, current_streak)
+
+            cat_data.setdefault(cat, []).append({
+                "pnl": pnl, "stake": stake, "edge": edge, "eq": eq,
+            })
+
+        n = len(pnls)
+        snap.total_trades = n
+        snap.win_rate = wins / n if n > 0 else 0.0
+        snap.total_pnl = sum(pnls)
+        snap.total_staked = sum(stakes)
+        snap.roi_pct = (
+            (snap.total_pnl / snap.total_staked * 100) if snap.total_staked > 0 else 0.0
+        )
+        snap.profit_factor = (
+            (gross_profit / gross_loss) if gross_loss > 0
+            else (float("inf") if gross_profit > 0 else 0.0)
+        )
+
+        winning_pnls = [p for p in pnls if p > 0]
+        losing_pnls = [p for p in pnls if p < 0]
+        snap.avg_win = (
+            sum(winning_pnls) / len(winning_pnls) if winning_pnls else 0.0
+        )
+        snap.avg_loss = (
+            sum(losing_pnls) / len(losing_pnls) if losing_pnls else 0.0
+        )
+        snap.largest_win = max(pnls) if pnls else 0.0
+        snap.largest_loss = min(pnls) if pnls else 0.0
+        snap.avg_edge_captured = total_edge / n if n > 0 else 0.0
+
+        snap.current_streak = current_streak
+        snap.best_streak = best_streak
+        snap.worst_streak = worst_streak
+
+        # Sharpe / Sortino (treat each position as one "return")
+        if n >= 2:
+            mean_ret = sum(pnls) / n
+            std_ret = math.sqrt(
+                sum((p - mean_ret) ** 2 for p in pnls) / (n - 1)
+            )
+            if std_ret > 0:
+                snap.sharpe_ratio = mean_ret / std_ret * math.sqrt(252)
+            downside = [p for p in pnls if p < 0]
+            if downside:
+                down_std = math.sqrt(
+                    sum(p ** 2 for p in downside) / len(downside)
+                )
+                if down_std > 0:
+                    snap.sortino_ratio = mean_ret / down_std * math.sqrt(252)
+
+        # ── Category breakdown ───────────────────────────────────
+        for cat, items in cat_data.items():
+            cat_pnls = [it["pnl"] for it in items]
+            cat_stakes = [it["stake"] for it in items]
+            cat_wins = sum(1 for p in cat_pnls if p > 0)
+            cat_total = len(items)
+            cat_total_pnl = sum(cat_pnls)
+            cat_total_staked = sum(cat_stakes)
+
+            snap.category_stats.append(CategoryStats(
+                category=cat,
+                total_trades=cat_total,
+                wins=cat_wins,
+                losses=sum(1 for p in cat_pnls if p < 0),
+                total_pnl=cat_total_pnl,
+                total_staked=cat_total_staked,
+                avg_edge=sum(it["edge"] for it in items) / cat_total if cat_total else 0.0,
+                avg_evidence_quality=sum(it["eq"] for it in items) / cat_total if cat_total else 0.0,
+                win_rate=cat_wins / cat_total if cat_total > 0 else 0.0,
+                roi_pct=(
+                    (cat_total_pnl / cat_total_staked * 100)
+                    if cat_total_staked > 0 else 0.0
+                ),
+                best_trade_pnl=max(cat_pnls) if cat_pnls else 0.0,
+                worst_trade_pnl=min(cat_pnls) if cat_pnls else 0.0,
+            ))
+
+        # ── Equity curve from trades + positions ─────────────────
+        trade_rows = self._query_safe(conn, """
+            SELECT t.market_id, t.created_at, t.stake_usd, p.pnl, p.size
+            FROM trades t
+            JOIN positions p ON t.market_id = p.market_id
+            WHERE t.status IN ('DRY_RUN', 'FILLED')
+            ORDER BY t.created_at ASC
+        """)
+        if trade_rows:
+            # Distribute each position's P&L evenly across its trades
+            from collections import Counter
+            trade_counts: Counter[str] = Counter()
+            for tr in trade_rows:
+                trade_counts[tr["market_id"]] += 1
+
+            cum_pnl = 0.0
+            peak_equity = self._bankroll
+            max_dd = 0.0
+            seen_markets: dict[str, int] = {}
+
+            for tr in trade_rows:
+                mid = tr["market_id"]
+                pos_pnl = float(tr["pnl"] or 0)
+                count = trade_counts[mid]
+                share = pos_pnl / count if count > 0 else 0.0
+
+                seen_markets[mid] = seen_markets.get(mid, 0) + 1
+                cum_pnl += share
+                equity = self._bankroll + cum_pnl
+                peak_equity = max(peak_equity, equity)
+                dd = (
+                    (peak_equity - equity) / peak_equity
+                    if peak_equity > 0 else 0.0
+                )
+                max_dd = max(max_dd, dd)
+
+                snap.equity_curve.append(EquityPoint(
+                    timestamp=tr["created_at"],
+                    equity=equity,
+                    pnl_cumulative=cum_pnl,
+                    drawdown_pct=dd,
+                    trade_count=seen_markets[mid],
+                ))
+
+            snap.max_drawdown_pct = max_dd
+            if max_dd > 0 and snap.total_pnl > 0:
+                annualised_return = snap.roi_pct / 100
+                snap.calmar_ratio = annualised_return / max_dd
+
+        # ── Rolling windows (by opened_at) ───────────────────────
+        for days, prefix in [(7, "7d"), (30, "30d")]:
+            window_rows = self._query_safe(conn, f"""
+                SELECT pnl, stake_usd
+                FROM positions
+                WHERE opened_at >= datetime('now', '-{days} days')
+            """)
+            if not window_rows:
+                continue
+            w_pnls = [float(r["pnl"] or 0) for r in window_rows]
+            w_wins = sum(1 for p in w_pnls if p > 0)
+            w_n = len(w_pnls)
+            if prefix == "7d":
+                snap.pnl_7d = sum(w_pnls)
+                snap.win_rate_7d = w_wins / w_n if w_n > 0 else 0.0
+                snap.trades_7d = w_n
+            else:
+                snap.pnl_30d = sum(w_pnls)
+                snap.win_rate_30d = w_wins / w_n if w_n > 0 else 0.0
+                snap.trades_30d = w_n
+
+        log.info(
+            "performance_tracker.open_position_fallback",
+            positions=n, total_pnl=round(snap.total_pnl, 2),
+            categories=len(snap.category_stats),
+        )
 
     # ── Leaderboard ──────────────────────────────────────────────────
 
