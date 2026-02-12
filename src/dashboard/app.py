@@ -1549,18 +1549,75 @@ def api_adaptive_weights() -> Any:
 
 @app.route("/api/equity-curve")
 def api_equity_curve() -> Any:
-    """Return equity curve data for charting."""
+    """Return equity curve data for charting.
+
+    Uses performance_log (realized P&L) when available.
+    Falls back to trades + positions (unrealized P&L) for paper trading
+    where no positions have resolved yet.
+    """
     from src.analytics.performance_tracker import PerformanceTracker
     conn = _get_conn()
     _ensure_tables(conn)
     try:
         cfg = _get_config()
-        tracker = PerformanceTracker(bankroll=cfg.risk.bankroll)
+        bankroll = cfg.risk.bankroll
+
+        # ── Try realized P&L from performance_log first ──────────
+        tracker = PerformanceTracker(bankroll=bankroll)
         snapshot = tracker.compute(conn)
-        return jsonify({
-            "points": [e.to_dict() for e in snapshot.equity_curve],
-            "bankroll": cfg.risk.bankroll,
-        })
+        if snapshot.equity_curve:
+            return jsonify({
+                "points": [e.to_dict() for e in snapshot.equity_curve],
+                "bankroll": bankroll,
+            })
+
+        # ── Fallback: build from trades + positions (unrealized) ─
+        # Each trade maps to a position via market_id; use the
+        # position's current pnl to compute per-trade contribution.
+        trades = conn.execute("""
+            SELECT t.market_id, t.stake_usd, t.created_at, t.status,
+                   p.pnl AS pos_pnl
+            FROM trades t
+            LEFT JOIN positions p ON t.market_id = p.market_id
+            WHERE t.status IN ('FILLED', 'SIMULATED')
+            ORDER BY t.created_at ASC
+        """).fetchall()
+
+        if not trades:
+            return jsonify({"points": [], "bankroll": bankroll})
+
+        # Count trades per market so we can split position pnl evenly
+        from collections import Counter
+        market_counts: dict[str, int] = Counter(
+            r["market_id"] for r in trades
+        )
+
+        cum_pnl = 0.0
+        peak_equity = bankroll
+        points = []
+        trade_num = 0
+
+        for r in trades:
+            trade_num += 1
+            pos_pnl = float(r["pos_pnl"] or 0)
+            # Distribute position P&L across its trades
+            n_trades = market_counts.get(r["market_id"], 1)
+            trade_pnl = pos_pnl / n_trades
+            cum_pnl += trade_pnl
+
+            equity = bankroll + cum_pnl
+            peak_equity = max(peak_equity, equity)
+            dd = ((peak_equity - equity) / peak_equity) if peak_equity > 0 else 0.0
+
+            points.append({
+                "timestamp": r["created_at"],
+                "equity": round(equity, 2),
+                "pnl_cumulative": round(cum_pnl, 2),
+                "drawdown_pct": round(dd, 4),
+                "trade_count": trade_num,
+            })
+
+        return jsonify({"points": points, "bankroll": bankroll})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
     finally:

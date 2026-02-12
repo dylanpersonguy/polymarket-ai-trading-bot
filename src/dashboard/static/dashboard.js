@@ -636,26 +636,11 @@ async function updateCharts() {
 
 // ─── Equity Curve ───────────────────────────────────────────────
 async function updateEquityCurve() {
-    const trades = await apiFetch('/api/trades');
-    if (!trades || !trades.trades || trades.trades.length === 0) return;
+    const resp = await apiFetch('/api/equity-curve');
+    if (!resp || !resp.points || resp.points.length === 0) return;
 
-    // Build cumulative P&L from trade history
-    const sorted = [...trades.trades].reverse(); // oldest first
-    let cumPnl = 0;
-    const labels = [];
-    const data = [];
-    sorted.forEach((t, i) => {
-        // Use actual PnL if available, otherwise estimate from price vs 0.5
-        const price = t.price || 0.5;
-        const stake = t.stake_usd || 0;
-        // For paper trades: estimate P&L based on price deviation from fair value
-        const pnl = (t.status === 'FILLED' || t.status === 'SIMULATED')
-            ? (1.0 - price) * (t.size || 0) * 0.1  // simplified unrealized
-            : 0;
-        cumPnl += pnl;
-        labels.push(shortDate(t.created_at));
-        data.push(parseFloat(cumPnl.toFixed(2)));
-    });
+    const labels = resp.points.map(p => shortDate(p.timestamp));
+    const data   = resp.points.map(p => p.pnl_cumulative);
 
     if (_charts.equity) _charts.equity.destroy();
     _charts.equity = new Chart($('#chart-equity-curve'), {
@@ -665,8 +650,8 @@ async function updateEquityCurve() {
             datasets: [{
                 label: 'Cumulative P&L ($)',
                 data,
-                borderColor: chartColors.green,
-                backgroundColor: chartBg.green,
+                borderColor: data[data.length - 1] >= 0 ? chartColors.green : chartColors.red,
+                backgroundColor: data[data.length - 1] >= 0 ? chartBg.green : chartBg.red,
                 fill: true,
                 tension: 0.3,
                 pointRadius: 2,
