@@ -1,0 +1,855 @@
+
+  🚀 Polymarket Bot Dashboard
+  ➜  http://127.0.0.1:2345
+  🤖 Trading engine auto-starting in background…
+     Cycle interval: 300s
+     Paper mode: True
+     Live trading: False
+
+ * Serving Flask app 'src.dashboard.app'
+ * Debug mode: off
+2026-02-12T07:03:58.939579Z [info     ] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:2345 [werkzeug]
+2026-02-12T07:03:58.939935Z [info     ] [33mPress CTRL+C to quit[0m  [werkzeug]
+2026-02-12T07:03:58.978583Z [info     ] migrations.running             [src.storage.migrations] version=8
+2026-02-12T07:03:58.980931Z [info     ] migrations.applied             [src.storage.migrations] version=8
+2026-02-12T07:03:58.980999Z [info     ] migrations.complete            [src.storage.migrations] version=8
+2026-02-12T07:03:58.981045Z [info     ] database.connected             [src.storage.database] path=data/bot.db
+2026-02-12T07:03:58.981088Z [info     ] engine.db_connected            [src.engine.loop] path=data/bot.db
+2026-02-12T07:03:58.981155Z [info     ] engine.starting                [src.engine.loop] bankroll=5000.0 interval_secs=300 live_trading=False
+2026-02-12T07:03:58.981286Z [info     ] engine.ws_feed_started         [src.engine.loop]
+2026-02-12T07:03:58.981318Z [info     ] engine.cycle_start             [src.engine.loop] cycle_id=1
+2026-02-12T07:03:58.981401Z [info     ] regime.detected                [src.analytics.regime_detector] confidence=0.3 kelly_mult=1.0 regime=NORMAL size_mult=1.0
+2026-02-12T07:03:59.019541Z [info     ] ws_feed.connecting             [src.connectors.ws_feed] url=wss://ws-subscriptions-clob.polymarket.com/ws/market
+2026-02-12T07:03:59.487298Z [info     ] HTTP Request: GET https://gamma-api.polymarket.com/markets?limit=200&offset=0&active=true&closed=false&order=volume&ascending=false "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:03:59.627028Z [info     ] ws_feed.connected              [src.connectors.ws_feed] tokens=0
+2026-02-12T07:03:59.676428Z [info     ] gamma.list_markets             [src.connectors.polymarket_gamma] count=200 offset=0
+2026-02-12T07:03:59.866569Z [info     ] HTTP Request: GET https://gamma-api.polymarket.com/markets?limit=200&offset=0&active=true&closed=false&order=startDate&ascending=false "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:00.261019Z [info     ] gamma.list_markets             [src.connectors.polymarket_gamma] count=200 offset=0
+2026-02-12T07:04:00.335307Z [info     ] market_filter.result           [src.engine.market_filter] avg_score=89.5 cooldown=0 hard_rejected=153 passed=5 soft_rejected=1 total=160
+2026-02-12T07:04:00.335767Z [info     ] classifier.result              [src.engine.market_classifier] category=ELECTION market_id=614766 queries=6 researchability=80 subcategory=general worth=True
+2026-02-12T07:04:00.335824Z [info     ] engine.pipeline_start          [src.engine.loop] category=ELECTION market_id=614766 market_type=ELECTION question='Will F1: The Movie win Best Film Editing at the 98th Academy Awards?' researchability=80 subcategory=general
+2026-02-12T07:04:00.489286Z [info     ] query_builder.built            [src.research.query_builder] category=ELECTION intents=['primary', 'primary', 'statistics', 'news', 'confirmation', 'contrarian'] market_id=614766 num_queries=6 researchability=80
+2026-02-12T07:04:00.781661Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:00.782490Z [info     ] serpapi.key_rotated            [src.connectors.web_search] key_index=1 total_keys=2
+2026-02-12T07:04:00.782637Z [warning  ] serpapi.rate_limited           [src.connectors.web_search] msg='Retrying with rotated key'
+2026-02-12T07:04:00.784006Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Afec.gov+F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:00.785495Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards%22+official+data+release+2026&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:00.897870Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:01.607199Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:02.608809Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards%22+official+data+release+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:03.611020Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:04.619699Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:05.609663Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Afec.gov+F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:06.602378Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards%22+official+data+release+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:07.612943Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:08.605477Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:09.604370Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Afec.gov+F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:10.610716Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:11.605574Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:11.868966Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:04:11] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:04:11.875783Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:04:11] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:04:11.883358Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:04:11] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:04:11.884263Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:04:11] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:04:11.884915Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:04:11] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:04:11.885365Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:04:11] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:04:11.886171Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:04:11.886494Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:04:11] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:04:12.667589Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:13.718739Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:14.759674Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:15.665926Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+F1%3A+The+Movie+win+Best+Film+Editing+at+the+98th+Academy+Awards&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:15.667216Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x10b372520 state=finished raised HTTPStatusError>]' query='site:fec.gov F1: The Movie win Best Film Editing at the 98th Academy Awards'
+2026-02-12T07:04:15.667481Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x10b366850 state=finished raised HTTPStatusError>]' query='site:ballotpedia.org F1: The Movie win Best Film Editing at the 98th Academy Awa'
+2026-02-12T07:04:15.667615Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x10b369700 state=finished raised HTTPStatusError>]' query='"F1: The Movie win Best Film Editing at the 98th Academy Awards" official data r'
+2026-02-12T07:04:15.667723Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x10b34ddf0 state=finished raised HTTPStatusError>]' query='F1: The Movie win Best Film Editing at the 98th Academy Awards latest news 2026'
+2026-02-12T07:04:15.667820Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x10b363ee0 state=finished raised HTTPStatusError>]' query='F1: The Movie win Best Film Editing at the 98th Academy Awards probability forec'
+2026-02-12T07:04:15.667909Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x10a23b3a0 state=finished raised HTTPStatusError>]' query='F1: The Movie win Best Film Editing at the 98th Academy Awards unlikely reasons '
+2026-02-12T07:04:15.668051Z [info     ] source_fetcher.fetched         [src.research.source_fetcher] returned=0 total_raw=0 with_content=0
+2026-02-12T07:04:15.675668Z [warning  ] evidence_extractor.no_sources  [src.research.evidence_extractor] market_id=614766
+2026-02-12T07:04:15.676073Z [info     ] engine.research_done           [src.engine.loop] bullets=0 market_id=614766 quality=0.0 sources=0
+2026-02-12T07:04:15.680425Z [info     ] feature_builder.built          [src.forecast.feature_builder] days_to_expiry=30.7 evidence_quality=0.0 implied_prob=0.172 market_id=614766 urgency=0.0
+/Users/dylanshilts/polymarket-bot/.venv/lib/python3.9/site-packages/google/api_core/_python_version_support.py:246: FutureWarning: You are using a non-supported Python version (3.9.6). Google will not post any further updates to google.api_core supporting this Python version. Please upgrade to the latest Python version, or at least Python 3.10, and then update google.api_core.
+  warnings.warn(message, FutureWarning)
+/Users/dylanshilts/polymarket-bot/.venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+/Users/dylanshilts/polymarket-bot/.venv/lib/python3.9/site-packages/google/auth/__init__.py:54: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+/Users/dylanshilts/polymarket-bot/.venv/lib/python3.9/site-packages/google/oauth2/__init__.py:40: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+/Users/dylanshilts/polymarket-bot/src/forecast/ensemble.py:255: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+2026-02-12T07:04:18.960807Z [info     ] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:22.202516Z [warning  ] ensemble.model_failed          [src.forecast.ensemble] error='"Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"' model=claude-3-5-sonnet-20241022
+2026-02-12T07:04:22.202675Z [warning  ] ensemble.model_failed          [src.forecast.ensemble] error='\n  No API_KEY or ADC found. Please either:\n    - Set the `GOOGLE_API_KEY` environment variable.\n    - Manually pass the key with `genai.configure(api_key=my_api_key)`.\n    - Or set up Application Default Credentials, see https://ai.google.dev/gemini-api/docs/oauth for more information.' model=gemini-1.5-pro
+2026-02-12T07:04:22.202799Z [info     ] ensemble.result                [src.forecast.ensemble] agg_prob=0.5 confidence=LOW method=trimmed_mean models_fail=2 models_ok=1 spread=0.0
+2026-02-12T07:04:22.204444Z [info     ] engine.ensemble_low_evidence_penalty [src.engine.loop] adjusted=0.5 original=0.5
+2026-02-12T07:04:22.204592Z [info     ] engine.forecast_done           [src.engine.loop] confidence=LOW edge=0.329 implied=0.172 market_id=614766 model=0.5
+2026-02-12T07:04:22.204720Z [info     ] calibrator.calibrated          [src.forecast.calibrator] adjustments=1 calibrated=0.5 method=platt raw=0.5
+2026-02-12T07:04:22.205817Z [info     ] edge_calc.result               [src.policy.edge_calc] cost_pct=0.0201 direction=BUY_YES ev_per_dollar=1.915 implied=0.172 model=0.5 net_edge=0.308 raw_edge=0.329
+2026-02-12T07:04:22.208549Z [info     ] risk_limits.checked            [src.policy.risk_limits] decision='NO TRADE' heat=0 market_id=614766 passed=8 violations=2 warnings=2
+2026-02-12T07:04:22.209538Z [info     ] engine.no_trade                [src.engine.loop] market_id=614766 violations=['EVIDENCE_QUALITY: 0.00 < threshold 0.55', 'LOW_CONFIDENCE: LOW < minimum MEDIUM']
+2026-02-12T07:04:22.210247Z [info     ] classifier.result              [src.engine.market_classifier] category=MACRO market_id=1323418 queries=7 researchability=90 subcategory=employment worth=True
+2026-02-12T07:04:22.210335Z [info     ] engine.pipeline_start          [src.engine.loop] category=MACRO market_id=1323418 market_type=MACRO question='Will Japan’s January 2026 unemployment rate be ≤2.1%?' researchability=90 subcategory=employment
+2026-02-12T07:04:22.218309Z [info     ] query_builder.built            [src.research.query_builder] category=MACRO intents=['primary', 'primary', 'statistics', 'news', 'confirmation', 'contrarian'] market_id=1323418 num_queries=6 researchability=90
+2026-02-12T07:04:22.457108Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Abls.gov+Japan%E2%80%99s+January+2026+unemployment+rate+be+%E2%89%A42.1%25&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:22.457847Z [info     ] serpapi.search                 [src.connectors.web_search] query='site:bls.gov Japan’s January 2026 unemployment rate be ≤2.1%' results=1
+2026-02-12T07:04:22.459220Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22Japan%E2%80%99s+January+2026+unemployment+rate+be+%E2%89%A42.1%25%22+official+data+release+2026&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:22.459790Z [info     ] serpapi.search                 [src.connectors.web_search] query='"Japan’s January 2026 unemployment rate be ≤2.1%" official data release 2026' results=1
+2026-02-12T07:04:22.466597Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Abea.gov+Japan%E2%80%99s+January+2026+unemployment+rate+be+%E2%89%A42.1%25&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:22.467200Z [info     ] serpapi.search                 [src.connectors.web_search] query='site:bea.gov Japan’s January 2026 unemployment rate be ≤2.1%' results=0
+2026-02-12T07:04:23.242064Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=Japan%E2%80%99s+January+2026+unemployment+rate+be+%E2%89%A42.1%25+unlikely+reasons+against+criticism&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=3&engine=google "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:23.244650Z [info     ] serpapi.search                 [src.connectors.web_search] query='Japan’s January 2026 unemployment rate be ≤2.1% unlikely reasons against critici' results=3
+2026-02-12T07:04:24.244959Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=Japan%E2%80%99s+January+2026+unemployment+rate+be+%E2%89%A42.1%25+latest+news+2026&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=3&engine=google "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:24.247031Z [info     ] serpapi.search                 [src.connectors.web_search] query='Japan’s January 2026 unemployment rate be ≤2.1% latest news 2026' results=3
+2026-02-12T07:04:25.239885Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=Japan%E2%80%99s+January+2026+unemployment+rate+be+%E2%89%A42.1%25+probability+forecast+prediction+analysis&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=3&engine=google "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:25.240627Z [info     ] serpapi.search                 [src.connectors.web_search] query='Japan’s January 2026 unemployment rate be ≤2.1% probability forecast prediction ' results=3
+2026-02-12T07:04:25.694739Z [info     ] HTTP Request: GET https://polymarket.com/event/january-2026-unemployment-rate-japan/will-japans-january-2026-unemployment-rate-be-2pt4 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:25.704508Z [info     ] HTTP Request: GET https://pizzint.watch/ "HTTP/1.1 307 Temporary Redirect" [httpx]
+2026-02-12T07:04:25.821829Z [info     ] HTTP Request: GET https://mlq.ai/prediction/market/january-2026-unemployment-rate-japan/ "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:25.880141Z [info     ] HTTP Request: GET https://macenews.com/preview-forecasters-see-japanese-unemployment-rate-flat-at-2-6-in-jan/ "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:25.889868Z [info     ] HTTP Request: GET https://www.bls.gov/opub/mlr/2022/article/growth-trends-for-selected-occupations-considered-at-risk-from-automation.htm "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:26.261579Z [info     ] HTTP Request: GET https://www.pizzint.watch/ "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:26.267764Z [info     ] source_fetcher.fetched         [src.research.source_fetcher] returned=9 total_raw=9 with_content=5
+2026-02-12T07:04:35.629986Z [info     ] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:35.637926Z [info     ] evidence_extractor.extracted   [src.research.evidence_extractor] bullets=5 contradictions=1 final_quality=0.6235999999999999 independent_quality=0.706 llm_quality=0.5 market_id=1323418
+2026-02-12T07:04:35.639525Z [info     ] engine.research_done           [src.engine.loop] bullets=5 market_id=1323418 quality=0.624 sources=9
+2026-02-12T07:04:35.641428Z [info     ] feature_builder.built          [src.forecast.feature_builder] days_to_expiry=18.7 evidence_quality=0.62 implied_prob=0.097 market_id=1323418 urgency=0.11
+2026-02-12T07:04:40.782225Z [info     ] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:04:44.857109Z [warning  ] ensemble.model_failed          [src.forecast.ensemble] error='"Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"' model=claude-3-5-sonnet-20241022
+2026-02-12T07:04:44.857313Z [warning  ] ensemble.model_failed          [src.forecast.ensemble] error='\n  No API_KEY or ADC found. Please either:\n    - Set the `GOOGLE_API_KEY` environment variable.\n    - Manually pass the key with `genai.configure(api_key=my_api_key)`.\n    - Or set up Application Default Credentials, see https://ai.google.dev/gemini-api/docs/oauth for more information.' model=gemini-1.5-pro
+2026-02-12T07:04:44.857403Z [info     ] ensemble.result                [src.forecast.ensemble] agg_prob=0.15 confidence=LOW method=trimmed_mean models_fail=2 models_ok=1 spread=0.0
+2026-02-12T07:04:44.857480Z [info     ] engine.forecast_done           [src.engine.loop] confidence=LOW edge=0.053 implied=0.097 market_id=1323418 model=0.15
+2026-02-12T07:04:44.857549Z [info     ] calibrator.calibrated          [src.forecast.calibrator] adjustments=2 calibrated=0.2061 method=platt raw=0.15
+2026-02-12T07:04:44.857596Z [info     ] engine.calibration_applied     [src.engine.loop] adjustments=['extremity_shrinkage: 0.150 → 0.173', 'contradiction_penalty (n=1): 0.173 → 0.206'] calibrated=0.2061 market_id=1323418 raw=0.15
+2026-02-12T07:04:44.857656Z [info     ] edge_calc.result               [src.policy.edge_calc] cost_pct=0.0201 direction=BUY_YES ev_per_dollar=1.136 implied=0.097 model=0.206 net_edge=0.09 raw_edge=0.11
+2026-02-12T07:04:44.858492Z [info     ] risk_limits.checked            [src.policy.risk_limits] decision='NO TRADE' heat=0 market_id=1323418 passed=8 violations=2 warnings=2
+2026-02-12T07:04:44.859280Z [info     ] engine.no_trade                [src.engine.loop] market_id=1323418 violations=['LOW_CONFIDENCE: LOW < minimum MEDIUM', 'MIN_IMPLIED_PROB: 9.65% < floor 10.00%']
+2026-02-12T07:04:44.859494Z [info     ] classifier.result              [src.engine.market_classifier] category=MACRO market_id=950065 queries=8 researchability=92 subcategory=fed_rates worth=True
+2026-02-12T07:04:44.859553Z [info     ] engine.pipeline_start          [src.engine.loop] category=MACRO market_id=950065 market_type=MACRO question='Will the Fed Pause–Pause–Pause in the next three decisions (Jan–Mar–Apr)?' researchability=92 subcategory=fed_rates
+2026-02-12T07:04:44.865870Z [info     ] query_builder.built            [src.research.query_builder] category=MACRO intents=['primary', 'primary', 'statistics', 'news', 'confirmation', 'contrarian'] market_id=950065 num_queries=6 researchability=92
+2026-02-12T07:04:45.256882Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Abls.gov+the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:45.257604Z [info     ] serpapi.key_rotated            [src.connectors.web_search] key_index=1 total_keys=2
+2026-02-12T07:04:45.257794Z [warning  ] serpapi.rate_limited           [src.connectors.web_search] msg='Retrying with rotated key'
+2026-02-12T07:04:45.259032Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Abea.gov+the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:45.259769Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29%22+official+data+release+2026&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:45.434622Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Abls.gov+the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:46.044002Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:46.982451Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29%22+official+data+release+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:47.979670Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Abea.gov+the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:48.977796Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:49.976952Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Abls.gov+the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:50.983956Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:51.979478Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Abea.gov+the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:52.996156Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:53.981292Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Abls.gov+the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:54.990770Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29%22+official+data+release+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:55.983856Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:56.985256Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:58.226209Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:04:59.111390Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:01.301927Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Fed+Pause%E2%80%93Pause%E2%80%93Pause+in+the+next+three+decisions+%28Jan%E2%80%93Mar%E2%80%93Apr%29+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:01.304222Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118a6b490 state=finished raised HTTPStatusError>]' query='site:bls.gov the Fed Pause–Pause–Pause in the next three decisions (Jan–Mar–Apr)'
+2026-02-12T07:05:01.304735Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118d28fa0 state=finished raised HTTPStatusError>]' query='site:bea.gov the Fed Pause–Pause–Pause in the next three decisions (Jan–Mar–Apr)'
+2026-02-12T07:05:01.305032Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118a22730 state=finished raised HTTPStatusError>]' query='"the Fed Pause–Pause–Pause in the next three decisions (Jan–Mar–Apr)" official d'
+2026-02-12T07:05:01.305234Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118a46340 state=finished raised HTTPStatusError>]' query='the Fed Pause–Pause–Pause in the next three decisions (Jan–Mar–Apr) latest news '
+2026-02-12T07:05:01.305419Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118a681c0 state=finished raised HTTPStatusError>]' query='the Fed Pause–Pause–Pause in the next three decisions (Jan–Mar–Apr) probability '
+2026-02-12T07:05:01.305614Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118a70160 state=finished raised HTTPStatusError>]' query='the Fed Pause–Pause–Pause in the next three decisions (Jan–Mar–Apr) unlikely rea'
+2026-02-12T07:05:01.305885Z [info     ] source_fetcher.fetched         [src.research.source_fetcher] returned=0 total_raw=0 with_content=0
+2026-02-12T07:05:01.315889Z [warning  ] evidence_extractor.no_sources  [src.research.evidence_extractor] market_id=950065
+2026-02-12T07:05:01.316395Z [info     ] engine.research_done           [src.engine.loop] bullets=0 market_id=950065 quality=0.0 sources=0
+2026-02-12T07:05:01.316626Z [info     ] feature_builder.built          [src.forecast.feature_builder] days_to_expiry=75.7 evidence_quality=0.0 implied_prob=0.68 market_id=950065 urgency=0.0
+2026-02-12T07:05:03.948375Z [info     ] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:07.095439Z [warning  ] ensemble.model_failed          [src.forecast.ensemble] error='"Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"' model=claude-3-5-sonnet-20241022
+2026-02-12T07:05:07.096022Z [warning  ] ensemble.model_failed          [src.forecast.ensemble] error='\n  No API_KEY or ADC found. Please either:\n    - Set the `GOOGLE_API_KEY` environment variable.\n    - Manually pass the key with `genai.configure(api_key=my_api_key)`.\n    - Or set up Application Default Credentials, see https://ai.google.dev/gemini-api/docs/oauth for more information.' model=gemini-1.5-pro
+2026-02-12T07:05:07.096417Z [info     ] ensemble.result                [src.forecast.ensemble] agg_prob=0.5 confidence=LOW method=trimmed_mean models_fail=2 models_ok=1 spread=0.0
+2026-02-12T07:05:07.096861Z [info     ] engine.ensemble_low_evidence_penalty [src.engine.loop] adjusted=0.5 original=0.5
+2026-02-12T07:05:07.097051Z [info     ] engine.forecast_done           [src.engine.loop] confidence=LOW edge=-0.18 implied=0.68 market_id=950065 model=0.5
+2026-02-12T07:05:07.097314Z [info     ] calibrator.calibrated          [src.forecast.calibrator] adjustments=1 calibrated=0.5 method=platt raw=0.5
+2026-02-12T07:05:07.097475Z [info     ] edge_calc.result               [src.policy.edge_calc] cost_pct=0.0201 direction=BUY_NO ev_per_dollar=0.563 implied=0.68 model=0.5 net_edge=0.16 raw_edge=-0.18
+2026-02-12T07:05:07.097946Z [info     ] risk_limits.checked            [src.policy.risk_limits] decision='NO TRADE' heat=0 market_id=950065 passed=8 violations=2 warnings=2
+2026-02-12T07:05:07.099949Z [info     ] engine.no_trade                [src.engine.loop] market_id=950065 violations=['EVIDENCE_QUALITY: 0.00 < threshold 0.55', 'LOW_CONFIDENCE: LOW < minimum MEDIUM']
+2026-02-12T07:05:07.101126Z [info     ] classifier.result              [src.engine.market_classifier] category=ELECTION market_id=643526 queries=6 researchability=80 subcategory=general worth=True
+2026-02-12T07:05:07.101274Z [info     ] engine.pipeline_start          [src.engine.loop] category=ELECTION market_id=643526 market_type=ELECTION question='Will the Sacramento Kings have the worst record in the NBA?' researchability=80 subcategory=general
+2026-02-12T07:05:07.114309Z [info     ] query_builder.built            [src.research.query_builder] category=ELECTION intents=['primary', 'primary', 'statistics', 'news', 'confirmation', 'contrarian'] market_id=643526 num_queries=6 researchability=80
+2026-02-12T07:05:07.273337Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Afec.gov+the+Sacramento+Kings+have+the+worst+record+in+the+NBA&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:07.274658Z [info     ] serpapi.key_rotated            [src.connectors.web_search] key_index=1 total_keys=2
+2026-02-12T07:05:07.274953Z [warning  ] serpapi.rate_limited           [src.connectors.web_search] msg='Retrying with rotated key'
+2026-02-12T07:05:07.278439Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+the+Sacramento+Kings+have+the+worst+record+in+the+NBA&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:07.279590Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22the+Sacramento+Kings+have+the+worst+record+in+the+NBA%22+official+data+release+2026&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:07.390011Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Afec.gov+the+Sacramento+Kings+have+the+worst+record+in+the+NBA&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:08.230726Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Sacramento+Kings+have+the+worst+record+in+the+NBA+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:09.237879Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Sacramento+Kings+have+the+worst+record+in+the+NBA+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:10.227500Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+the+Sacramento+Kings+have+the+worst+record+in+the+NBA&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:11.235067Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22the+Sacramento+Kings+have+the+worst+record+in+the+NBA%22+official+data+release+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:11.917304Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:05:11] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:05:11.921580Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:05:11] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:05:11.922466Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:05:11] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:05:11.924452Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:05:11] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:05:11.924976Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:05:11] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:05:11.925546Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:05:11] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:05:11.925959Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:05:11.926225Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:05:11] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:05:12.231748Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Sacramento+Kings+have+the+worst+record+in+the+NBA+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:13.266572Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Sacramento+Kings+have+the+worst+record+in+the+NBA+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:14.307054Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+the+Sacramento+Kings+have+the+worst+record+in+the+NBA&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:15.443896Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22the+Sacramento+Kings+have+the+worst+record+in+the+NBA%22+official+data+release+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:16.233955Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Sacramento+Kings+have+the+worst+record+in+the+NBA+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:17.228613Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Sacramento+Kings+have+the+worst+record+in+the+NBA+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:18.230034Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Afec.gov+the+Sacramento+Kings+have+the+worst+record+in+the+NBA&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:19.235940Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Sacramento+Kings+have+the+worst+record+in+the+NBA+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:20.342161Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Afec.gov+the+Sacramento+Kings+have+the+worst+record+in+the+NBA&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:21.227409Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Sacramento+Kings+have+the+worst+record+in+the+NBA+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:23.345283Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=the+Sacramento+Kings+have+the+worst+record+in+the+NBA+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:23.347859Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118d02040 state=finished raised HTTPStatusError>]' query='site:fec.gov the Sacramento Kings have the worst record in the NBA'
+2026-02-12T07:05:23.348144Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118e925e0 state=finished raised HTTPStatusError>]' query='site:ballotpedia.org the Sacramento Kings have the worst record in the NBA'
+2026-02-12T07:05:23.348239Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118e86730 state=finished raised HTTPStatusError>]' query='"the Sacramento Kings have the worst record in the NBA" official data release 20'
+2026-02-12T07:05:23.348344Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118e8da90 state=finished raised HTTPStatusError>]' query='the Sacramento Kings have the worst record in the NBA latest news 2026'
+2026-02-12T07:05:23.348413Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118a61670 state=finished raised HTTPStatusError>]' query='the Sacramento Kings have the worst record in the NBA probability forecast predi'
+2026-02-12T07:05:23.348483Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118e81610 state=finished raised HTTPStatusError>]' query='the Sacramento Kings have the worst record in the NBA unlikely reasons against c'
+2026-02-12T07:05:23.348724Z [info     ] source_fetcher.fetched         [src.research.source_fetcher] returned=0 total_raw=0 with_content=0
+2026-02-12T07:05:23.359648Z [warning  ] evidence_extractor.no_sources  [src.research.evidence_extractor] market_id=643526
+2026-02-12T07:05:23.360512Z [info     ] engine.research_done           [src.engine.loop] bullets=0 market_id=643526 quality=0.0 sources=0
+2026-02-12T07:05:23.361132Z [info     ] feature_builder.built          [src.forecast.feature_builder] days_to_expiry=58.7 evidence_quality=0.0 implied_prob=0.511 market_id=643526 urgency=0.0
+2026-02-12T07:05:27.468301Z [info     ] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:29.264255Z [warning  ] ensemble.model_failed          [src.forecast.ensemble] error='"Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"' model=claude-3-5-sonnet-20241022
+2026-02-12T07:05:29.264697Z [warning  ] ensemble.model_failed          [src.forecast.ensemble] error='\n  No API_KEY or ADC found. Please either:\n    - Set the `GOOGLE_API_KEY` environment variable.\n    - Manually pass the key with `genai.configure(api_key=my_api_key)`.\n    - Or set up Application Default Credentials, see https://ai.google.dev/gemini-api/docs/oauth for more information.' model=gemini-1.5-pro
+2026-02-12T07:05:29.264943Z [info     ] ensemble.result                [src.forecast.ensemble] agg_prob=0.5 confidence=LOW method=trimmed_mean models_fail=2 models_ok=1 spread=0.0
+2026-02-12T07:05:29.265174Z [info     ] engine.ensemble_low_evidence_penalty [src.engine.loop] adjusted=0.5 original=0.5
+2026-02-12T07:05:29.265277Z [info     ] engine.forecast_done           [src.engine.loop] confidence=LOW edge=-0.011 implied=0.511 market_id=643526 model=0.5
+2026-02-12T07:05:29.265455Z [info     ] calibrator.calibrated          [src.forecast.calibrator] adjustments=1 calibrated=0.5 method=platt raw=0.5
+2026-02-12T07:05:29.265636Z [info     ] edge_calc.result               [src.policy.edge_calc] cost_pct=0.0201 direction=BUY_NO ev_per_dollar=0.024 implied=0.511 model=0.5 net_edge=-0.009 raw_edge=-0.011
+2026-02-12T07:05:29.266134Z [info     ] risk_limits.checked            [src.policy.risk_limits] decision='NO TRADE' heat=0 market_id=643526 passed=6 violations=4 warnings=2
+2026-02-12T07:05:29.267120Z [info     ] engine.no_trade                [src.engine.loop] market_id=643526 violations=['MIN_EDGE: net |edge| 0.0086 < threshold 0.05', 'EVIDENCE_QUALITY: 0.00 < threshold 0.55', 'LOW_CONFIDENCE: LOW < minimum MEDIUM', 'NEGATIVE_EDGE: net_edge 0.0086 is not positive (costs exceed raw edge)']
+2026-02-12T07:05:29.268286Z [info     ] classifier.result              [src.engine.market_classifier] category=ELECTION market_id=582165 queries=6 researchability=80 subcategory=general worth=True
+2026-02-12T07:05:29.268420Z [info     ] engine.pipeline_start          [src.engine.loop] category=ELECTION market_id=582165 market_type=ELECTION question='Will Rayo Vallecano finish in the top 4 of the La Liga 2025–26 standings?' researchability=80 subcategory=general
+2026-02-12T07:05:29.281521Z [info     ] query_builder.built            [src.research.query_builder] category=ELECTION intents=['primary', 'primary', 'statistics', 'news', 'confirmation', 'contrarian'] market_id=582165 num_queries=6 researchability=80
+2026-02-12T07:05:29.634346Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings%22+official+data+release+2026&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:29.636471Z [info     ] serpapi.key_rotated            [src.connectors.web_search] key_index=1 total_keys=2
+2026-02-12T07:05:29.636841Z [warning  ] serpapi.rate_limited           [src.connectors.web_search] msg='Retrying with rotated key'
+2026-02-12T07:05:29.638437Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:29.639208Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Afec.gov+Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:29.813822Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings%22+official+data+release+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:30.458362Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:31.486801Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:32.401422Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:33.401161Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:34.403587Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:35.406113Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Afec.gov+Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:36.400361Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings%22+official+data+release+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:37.414914Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:38.398112Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:39.403818Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Afec.gov+Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:40.409523Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings%22+official+data+release+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:41.430279Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:42.403392Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:43.570321Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:45.744819Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=Rayo+Vallecano+finish+in+the+top+4+of+the+La+Liga+2025%E2%80%9326+standings+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:05:45.746839Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118d09700 state=finished raised HTTPStatusError>]' query='site:fec.gov Rayo Vallecano finish in the top 4 of the La Liga 2025–26 standings'
+2026-02-12T07:05:45.747205Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118d06c40 state=finished raised HTTPStatusError>]' query='site:ballotpedia.org Rayo Vallecano finish in the top 4 of the La Liga 2025–26 s'
+2026-02-12T07:05:45.747415Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118d33730 state=finished raised HTTPStatusError>]' query='"Rayo Vallecano finish in the top 4 of the La Liga 2025–26 standings" official d'
+2026-02-12T07:05:45.747600Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118d02430 state=finished raised HTTPStatusError>]' query='Rayo Vallecano finish in the top 4 of the La Liga 2025–26 standings latest news '
+2026-02-12T07:05:45.747793Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118a77fa0 state=finished raised HTTPStatusError>]' query='Rayo Vallecano finish in the top 4 of the La Liga 2025–26 standings probability '
+2026-02-12T07:05:45.747906Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118e81d00 state=finished raised HTTPStatusError>]' query='Rayo Vallecano finish in the top 4 of the La Liga 2025–26 standings unlikely rea'
+2026-02-12T07:05:45.748054Z [info     ] source_fetcher.fetched         [src.research.source_fetcher] returned=0 total_raw=0 with_content=0
+2026-02-12T07:05:45.755885Z [warning  ] evidence_extractor.no_sources  [src.research.evidence_extractor] market_id=582165
+2026-02-12T07:05:45.756568Z [info     ] engine.research_done           [src.engine.loop] bullets=0 market_id=582165 quality=0.0 sources=0
+2026-02-12T07:05:45.756826Z [info     ] feature_builder.built          [src.forecast.feature_builder] days_to_expiry=106.7 evidence_quality=0.0 implied_prob=0.059 market_id=582165 urgency=0.0
+2026-02-12T07:05:50.907866Z [info     ] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:54.672128Z [warning  ] ensemble.model_failed          [src.forecast.ensemble] error='"Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"' model=claude-3-5-sonnet-20241022
+2026-02-12T07:05:54.672580Z [warning  ] ensemble.model_failed          [src.forecast.ensemble] error='\n  No API_KEY or ADC found. Please either:\n    - Set the `GOOGLE_API_KEY` environment variable.\n    - Manually pass the key with `genai.configure(api_key=my_api_key)`.\n    - Or set up Application Default Credentials, see https://ai.google.dev/gemini-api/docs/oauth for more information.' model=gemini-1.5-pro
+2026-02-12T07:05:54.672807Z [info     ] ensemble.result                [src.forecast.ensemble] agg_prob=0.5 confidence=LOW method=trimmed_mean models_fail=2 models_ok=1 spread=0.0
+2026-02-12T07:05:54.673026Z [info     ] engine.ensemble_low_evidence_penalty [src.engine.loop] adjusted=0.5 original=0.5
+2026-02-12T07:05:54.673145Z [info     ] engine.forecast_done           [src.engine.loop] confidence=LOW edge=0.441 implied=0.059 market_id=582165 model=0.5
+2026-02-12T07:05:54.673326Z [info     ] calibrator.calibrated          [src.forecast.calibrator] adjustments=1 calibrated=0.5 method=platt raw=0.5
+2026-02-12T07:05:54.673507Z [info     ] edge_calc.result               [src.policy.edge_calc] cost_pct=0.0201 direction=BUY_YES ev_per_dollar=7.403 implied=0.059 model=0.5 net_edge=0.42 raw_edge=0.441
+2026-02-12T07:05:54.674984Z [info     ] risk_limits.checked            [src.policy.risk_limits] decision='NO TRADE' heat=0 market_id=582165 passed=7 violations=3 warnings=2
+2026-02-12T07:05:54.675811Z [info     ] engine.no_trade                [src.engine.loop] market_id=582165 violations=['EVIDENCE_QUALITY: 0.00 < threshold 0.55', 'LOW_CONFIDENCE: LOW < minimum MEDIUM', 'MIN_IMPLIED_PROB: 5.95% < floor 10.00%']
+2026-02-12T07:05:54.922087Z [info     ] HTTP Request: GET https://gamma-api.polymarket.com/markets/923035 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:54.924763Z [info     ] gamma.get_market               [src.connectors.polymarket_gamma] market_id=923035 question='Will the number of Republican Senate members who retire in 2026 be exactly 5?'
+2026-02-12T07:05:54.925576Z [info     ] engine.position_update         [src.engine.loop] current=0.56 entry=0.5656 market_id=923035 pnl=-0.5 source=rest
+2026-02-12T07:05:54.926079Z [info     ] engine.positions_checked       [src.engine.loop] count=1 rest_hits=1 total_pnl=-0.5 ws_hits=0
+2026-02-12T07:05:54.926274Z [info     ] engine.wallet_scan_start       [src.engine.loop]
+2026-02-12T07:05:55.403702Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0x492442eab586f242b53bda933fd5de859c8a3782&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:55.696121Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0x6a72f61820b26b1fe4d956e17b6dc2a1ea3033ee&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:55.976883Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0xc2e7800b5af46e6093872b177b7a5e7f0563be51&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:56.255217Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0xd25c72ac0928385610611c8148803dc717334d20&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:56.686934Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0xdb27bf2ac5d428a9c63dbc914611036855a6c56e&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:56.955334Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0x1b7b52b0daa26c4d8e42f97ad3a23a6c946cec12&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:57.277096Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0xf4290ebd94e2e1e0b858ce7e85cb5208fe8a11f0&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:57.705904Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0x72e6055d1a7a7a7e2a4bca75dac0e21e38e23e2f&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:58.113972Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0x58e1e4e28f31b4405e6e38a021aedf65c2f23f73&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:58.413946Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0x3a7e23e85f03e40729f66a0a3e6b4f7f0b1f1c5d&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:58.892878Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0x2a4f7b7e0c8f3d1e9a6b5c4d8e2f1a0b3c6d9e7f&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:59.247915Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0x9c1d6e5f4a3b2c7d8e9f0a1b2c3d4e5f6a7b8c9d&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:05:59.601167Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0x4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:06:00.112170Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0x7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:06:00.467627Z [info     ] HTTP Request: GET https://data-api.polymarket.com/positions?user=0x0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b&sortBy=CURRENT&limit=200&offset=0 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:06:00.470485Z [info     ] wallet_scanner.scan_complete   [src.analytics.wallet_scanner] deltas=0 positions=436 signals=51 wallets=15
+2026-02-12T07:06:00.474095Z [info     ] wallet_scanner.saved           [src.analytics.wallet_scanner] deltas=0 signals=51 wallets=15
+2026-02-12T07:06:00.474416Z [info     ] engine.wallet_scan_complete    [src.engine.loop] deltas=0 signals=51 wallets=15
+2026-02-12T07:06:00.498603Z [info     ] arbitrage.detected             [src.policy.arbitrage] actionable=17 num_opportunities=17
+2026-02-12T07:06:00.498766Z [info     ] engine.arbitrage_scan          [src.engine.loop] actionable=17 total=17
+2026-02-12T07:06:00.499437Z [info     ] engine.cycle_complete          [src.engine.loop] cycle_cost_usd=0.055 cycle_id=1 duration=121.52 edges=4 researched=5 scanned=160 status=completed total_cost_usd=0.055 trades=0
+2026-02-12T07:06:00.502399Z [info     ] engine.sleeping                [src.engine.loop] seconds=300
+2026-02-12T07:06:11.874566Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:06:11.876037Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:06:11] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:06:11.882051Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:06:11] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:06:11.885344Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:06:11] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:06:11.886468Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:06:11] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:06:11.889604Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:06:11] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:06:11.890337Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:06:11] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:06:11.890881Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:06:11.891250Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:06:11] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:11.888339Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:07:11.891313Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:11] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:11.894753Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:11] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:11.897512Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:11] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:11.899049Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:11] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:11.900209Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:11] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:11.904593Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:11] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:11.901411Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:07:11.909600Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:11] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:33.135742Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:07:33.137612Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:33] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:33.142793Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:33] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:33.143211Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:33] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:33.143591Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:33] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:33.144947Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:33] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:33.146256Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:33] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:33.146400Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:07:33.146942Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:33] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:35.747143Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:07:35.748543Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:35] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:35.755044Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:35] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:35.756025Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:35] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:35.758925Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:35] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:35.760806Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:35] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:35.762875Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:35] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:35.763592Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:07:35.764341Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:35] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:37.771499Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:37] "GET / HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:37.803336Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:37] "[36mGET /static/style.css?v=11 HTTP/1.1[0m" 304 - [werkzeug]
+2026-02-12T07:07:37.803873Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:37] "[36mGET /static/dashboard.js?v=11 HTTP/1.1[0m" 304 - [werkzeug]
+2026-02-12T07:07:38.184392Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/positions HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.185989Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/risk HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.189414Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/trades HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.191308Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.193246Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.194236Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:07:38.194668Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.196280Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/candidates HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.198221Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.199132Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/forecasts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.199735Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/audit HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.200340Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.201439Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/config HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.202049Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:07:38.202925Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.203902Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/model-accuracy HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.204662Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/calibration-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.204772Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:07:38.205329Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/analytics HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.205838Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/alerts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.206607Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.209976Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/whale-activity HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:38.216172Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:38] "GET /api/decision-log?limit=30 HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:53.185421Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:07:53.187417Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:53] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:53.190270Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:53] "GET /api/positions HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:53.192217Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:53] "GET /api/trades HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:53.194301Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:53] "GET /api/candidates HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:53.196873Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:53] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:07:53.199006Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:07:53] "GET /api/forecasts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:08.858238Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:08:08.859944Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:08] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:08.865657Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:08] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:08.866241Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:08] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:08.867268Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:08] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:08.869450Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:08] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:08.869597Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:08:08.870761Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:08] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:08.871706Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:08] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:23.882038Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:08:23.885014Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:23] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:23.889096Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:23] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:23.889752Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:23] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:23.890195Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:23] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:23.891531Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:23] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:23.891897Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:08:23.892427Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:23] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:23.892710Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:23] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:38.856909Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:08:38.858579Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:38] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:38.862286Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:38] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:38.862993Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:38] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:38.864265Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:38] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:38.865785Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:38] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:38.866096Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:08:38.867200Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:38] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:38.867625Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:38] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:53.858013Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:08:53.859569Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:53] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:53.864118Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:53] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:53.864752Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:53] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:53.865689Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:53] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:53.868324Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:53] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:53.868421Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:08:53.869624Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:53] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:08:53.870086Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:08:53] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:09:08.858872Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:09:08.860984Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:09:08] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:09:08.864763Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:09:08] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:09:08.865774Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:09:08] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:09:08.867279Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:09:08] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:09:08.869198Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:09:08] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:09:08.869726Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:09:08] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:09:08.869950Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:09:08.871073Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:09:08] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:10:11.889532Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:10:11.892338Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:10:11] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:10:11.899522Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:10:11] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:10:11.900021Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:10:11] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:10:11.900739Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:10:11] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:10:11.901781Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:10:11] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:10:11.902444Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:10:11] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:10:11.902873Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:10:11.903203Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:10:11] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:00.508763Z [info     ] engine.cycle_start             [src.engine.loop] cycle_id=2
+2026-02-12T07:11:00.513169Z [info     ] regime.detected                [src.analytics.regime_detector] confidence=0.3 kelly_mult=1.0 regime=NORMAL size_mult=1.0
+2026-02-12T07:11:00.766941Z [info     ] HTTP Request: GET https://gamma-api.polymarket.com/markets?limit=200&offset=0&active=true&closed=false&order=volume&ascending=false "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:11:00.817225Z [info     ] gamma.list_markets             [src.connectors.polymarket_gamma] count=200 offset=0
+2026-02-12T07:11:01.235137Z [info     ] HTTP Request: GET https://gamma-api.polymarket.com/markets?limit=200&offset=0&active=true&closed=false&order=startDate&ascending=false "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:11:01.591404Z [info     ] gamma.list_markets             [src.connectors.polymarket_gamma] count=200 offset=0
+2026-02-12T07:11:01.665864Z [info     ] market_filter.result           [src.engine.market_filter] avg_score=68.0 cooldown=5 hard_rejected=153 passed=1 soft_rejected=1 total=160
+2026-02-12T07:11:01.666319Z [info     ] classifier.result              [src.engine.market_classifier] category=ELECTION market_id=957617 queries=6 researchability=80 subcategory=general worth=True
+2026-02-12T07:11:01.666370Z [info     ] engine.pipeline_start          [src.engine.loop] category=ELECTION market_id=957617 market_type=ELECTION question='Will England reach the semifinals of the 2026 ICC Men’s T20 World Cup?' researchability=80 subcategory=general
+2026-02-12T07:11:01.675632Z [info     ] query_builder.built            [src.research.query_builder] category=ELECTION intents=['primary', 'primary', 'statistics', 'news', 'confirmation', 'contrarian'] market_id=957617 num_queries=6 researchability=80
+2026-02-12T07:11:02.018518Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:02.019921Z [info     ] serpapi.key_rotated            [src.connectors.web_search] key_index=1 total_keys=2
+2026-02-12T07:11:02.020161Z [warning  ] serpapi.rate_limited           [src.connectors.web_search] msg='Retrying with rotated key'
+2026-02-12T07:11:02.021558Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup%22+official+data+release+2026&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:02.022269Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Afec.gov+England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup&api_key=09772968bd55815c49bfe12c6f9da45b20fee2c3ae926cbd6b8cc233f1803012&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:02.196993Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:02.898098Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:03.856091Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:04.864083Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:05.793088Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Afec.gov+England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:06.796731Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:07.800993Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:08.803459Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Aballotpedia.org+England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:09.798518Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:10.955083Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup+latest+news+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:11.789984Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=site%3Afec.gov+England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:11.888685Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:11:11.889347Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:11] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:11.896810Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:11] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:11.899424Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:11] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:11.901345Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:11] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:11.905422Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:11] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:11.902221Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:11:11.909606Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:11] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:11.911021Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:11] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:12.790598Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup%22+official+data+release+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:13.793920Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup+unlikely+reasons+against+criticism&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:14.792501Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:15.798025Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=%22England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup%22+official+data+release+2026&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=5&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:16.970534Z [info     ] HTTP Request: GET https://serpapi.com/search.json?q=England+reach+the+semifinals+of+the+2026+ICC+Men%E2%80%99s+T20+World+Cup+probability+forecast+prediction+analysis&api_key=66b0067f15b9300d5af6a2f9b50d9a7a6bfeda0f6b8d51cff89d307fb085fbf8&num=3&engine=google "HTTP/1.1 429 Too Many Requests" [httpx]
+2026-02-12T07:11:16.972672Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118a74670 state=finished raised HTTPStatusError>]' query='site:fec.gov England reach the semifinals of the 2026 ICC Men’s T20 World Cup'
+2026-02-12T07:11:16.972953Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118d30f70 state=finished raised HTTPStatusError>]' query='site:ballotpedia.org England reach the semifinals of the 2026 ICC Men’s T20 Worl'
+2026-02-12T07:11:16.973076Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x118d065e0 state=finished raised HTTPStatusError>]' query='"England reach the semifinals of the 2026 ICC Men’s T20 World Cup" official data'
+2026-02-12T07:11:16.973183Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x10cd96c10 state=finished raised HTTPStatusError>]' query='England reach the semifinals of the 2026 ICC Men’s T20 World Cup latest news 202'
+2026-02-12T07:11:16.973279Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x1189fcdf0 state=finished raised HTTPStatusError>]' query='England reach the semifinals of the 2026 ICC Men’s T20 World Cup probability for'
+2026-02-12T07:11:16.973379Z [warning  ] source_fetcher.query_failed    [src.research.source_fetcher] error='RetryError[<Future at 0x10a23b190 state=finished raised HTTPStatusError>]' query='England reach the semifinals of the 2026 ICC Men’s T20 World Cup unlikely reason'
+2026-02-12T07:11:16.973514Z [info     ] source_fetcher.fetched         [src.research.source_fetcher] returned=0 total_raw=0 with_content=0
+2026-02-12T07:11:16.981290Z [warning  ] evidence_extractor.no_sources  [src.research.evidence_extractor] market_id=957617
+2026-02-12T07:11:16.981821Z [info     ] engine.research_done           [src.engine.loop] bullets=0 market_id=957617 quality=0.0 sources=0
+2026-02-12T07:11:16.982059Z [info     ] feature_builder.built          [src.forecast.feature_builder] days_to_expiry=16.7 evidence_quality=0.0 implied_prob=0.66 market_id=957617 urgency=0.13
+2026-02-12T07:11:19.367850Z [info     ] HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:11:19.970429Z [warning  ] ensemble.model_failed          [src.forecast.ensemble] error='"Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"' model=claude-3-5-sonnet-20241022
+2026-02-12T07:11:19.970765Z [warning  ] ensemble.model_failed          [src.forecast.ensemble] error='\n  No API_KEY or ADC found. Please either:\n    - Set the `GOOGLE_API_KEY` environment variable.\n    - Manually pass the key with `genai.configure(api_key=my_api_key)`.\n    - Or set up Application Default Credentials, see https://ai.google.dev/gemini-api/docs/oauth for more information.' model=gemini-1.5-pro
+2026-02-12T07:11:19.970971Z [info     ] ensemble.result                [src.forecast.ensemble] agg_prob=0.5 confidence=LOW method=trimmed_mean models_fail=2 models_ok=1 spread=0.0
+2026-02-12T07:11:19.971170Z [info     ] engine.ensemble_low_evidence_penalty [src.engine.loop] adjusted=0.5 original=0.5
+2026-02-12T07:11:19.971284Z [info     ] engine.forecast_done           [src.engine.loop] confidence=LOW edge=-0.16 implied=0.66 market_id=957617 model=0.5
+2026-02-12T07:11:19.971438Z [info     ] calibrator.calibrated          [src.forecast.calibrator] adjustments=1 calibrated=0.5 method=platt raw=0.5
+2026-02-12T07:11:19.971598Z [info     ] edge_calc.result               [src.policy.edge_calc] cost_pct=0.0201 direction=BUY_NO ev_per_dollar=0.471 implied=0.66 model=0.5 net_edge=0.14 raw_edge=-0.16
+2026-02-12T07:11:19.972170Z [info     ] risk_limits.checked            [src.policy.risk_limits] decision='NO TRADE' heat=0 market_id=957617 passed=8 violations=2 warnings=2
+2026-02-12T07:11:19.972749Z [info     ] engine.no_trade                [src.engine.loop] market_id=957617 violations=['EVIDENCE_QUALITY: 0.00 < threshold 0.55', 'LOW_CONFIDENCE: LOW < minimum MEDIUM']
+2026-02-12T07:11:20.180864Z [info     ] HTTP Request: GET https://gamma-api.polymarket.com/markets/923035 "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:11:20.182739Z [info     ] gamma.get_market               [src.connectors.polymarket_gamma] market_id=923035 question='Will the number of Republican Senate members who retire in 2026 be exactly 5?'
+2026-02-12T07:11:20.183237Z [info     ] engine.position_update         [src.engine.loop] current=0.56 entry=0.5656 market_id=923035 pnl=-0.5 source=rest
+2026-02-12T07:11:20.183679Z [info     ] engine.positions_checked       [src.engine.loop] count=1 rest_hits=1 total_pnl=-0.5 ws_hits=0
+2026-02-12T07:11:20.183931Z [info     ] engine.cycle_complete          [src.engine.loop] cycle_cost_usd=0.005 cycle_id=2 duration=19.68 edges=1 researched=1 scanned=160 status=completed total_cost_usd=0.06 trades=0
+2026-02-12T07:11:20.187768Z [info     ] engine.sleeping                [src.engine.loop] seconds=300
+2026-02-12T07:11:44.910407Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:11:44.911890Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:44] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:44.917904Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:44] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:44.918302Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:44] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:44.919110Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:44] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:44.923803Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:44] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:44.925797Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:44] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:44.928568Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:11:44.930987Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:44] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:53.197815Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:11:53.202750Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:53] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:53.210940Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:53] "GET /api/positions HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:53.221441Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:53] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:53.226798Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:53] "GET /api/forecasts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:53.233326Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:53] "GET /api/candidates HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:11:53.239152Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:11:53] "GET /api/trades HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:08.188040Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:12:08.190049Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:08] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:08.192678Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:08] "GET /api/positions HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:08.194523Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:08] "GET /api/trades HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:08.197605Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:08] "GET /api/candidates HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:08.200394Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:08] "GET /api/forecasts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:08.201314Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:08] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:23.870335Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:12:23.878459Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:23] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:23.886250Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:23] "GET /api/positions HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:23.888222Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:23] "GET /api/trades HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:23.889999Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:23] "GET /api/candidates HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:23.891200Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:23] "GET /api/forecasts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:23.891651Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:23] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:38.224911Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:12:38.226579Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:38] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:38.227987Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:38] "GET /api/positions HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:38.229474Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:38] "GET /api/candidates HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:38.229729Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:38] "GET /api/trades HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:38.230482Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:38] "GET /api/forecasts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:38.230800Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:38] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:53.859965Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:12:53.861558Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:53] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:53.865320Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:53] "GET /api/positions HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:53.867254Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:53] "GET /api/trades HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:53.869995Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:53] "GET /api/candidates HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:53.870492Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:53] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:12:53.872690Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:12:53] "GET /api/forecasts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:08.880214Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:13:08.882713Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:08] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:08.888115Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:08] "GET /api/positions HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:08.890366Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:08] "GET /api/trades HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:08.892174Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:08] "GET /api/candidates HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:08.893158Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:08] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:08.894358Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:08] "GET /api/forecasts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:23.881287Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:13:23.883614Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:23] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:23.886898Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:23] "GET /api/positions HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:23.889117Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:23] "GET /api/trades HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:23.894525Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:23] "GET /api/candidates HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:23.897286Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:23] "GET /api/forecasts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:23.898544Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:23] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:38.920891Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:13:38.925559Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:38] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:38.929842Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:38] "GET /api/positions HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:38.930991Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:38] "GET /api/trades HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:38.933076Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:38] "GET /api/candidates HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:38.934246Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:38] "GET /api/forecasts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:38.934911Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:38] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:53.191752Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:13:53.195210Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:53] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:53.198761Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:53] "GET /api/positions HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:53.201027Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:53] "GET /api/trades HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:53.204228Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:53] "GET /api/candidates HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:53.204729Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:53] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:13:53.205738Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:13:53] "GET /api/forecasts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:08.189822Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:14:08.192009Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:08] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:08.194561Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:08] "GET /api/positions HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:08.196899Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:08] "GET /api/trades HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:08.200344Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:08] "GET /api/candidates HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:08.202049Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:08] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:08.203735Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:08] "GET /api/forecasts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:23.211598Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:14:23.224430Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:23] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:23.241917Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:23] "GET /api/positions HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:23.246912Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:23] "GET /api/candidates HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:23.250775Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:23] "GET /api/forecasts HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:23.251368Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:23] "GET /api/trades HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:23.252400Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:23] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:38.188271Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:14:38.189348Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:38] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:38.191029Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:38] "GET /api/calibration-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:38.191699Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:38] "GET /api/model-accuracy HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:38.193256Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:14:38.193862Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:38] "GET /api/analytics HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:38.194190Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:38] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:38.198131Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:38] "GET /api/decision-log?limit=30 HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:53.188367Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:14:53.189523Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:53] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:53.193645Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:53] "GET /api/calibration-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:53.195898Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:53] "GET /api/model-accuracy HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:53.198780Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:53] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:53.199506Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:14:53.200791Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:53] "GET /api/analytics HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:14:53.208312Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:14:53] "GET /api/decision-log?limit=30 HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:08.868292Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:15:08.871025Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:08] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:08.875428Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:08] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:08.876202Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:08] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:08.877227Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:08] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:08.879405Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:08] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:08.881168Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:08] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:08.881283Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:15:08.882130Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:08] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:23.196997Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:15:23.200145Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:23] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:23.205165Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:23] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:23.207375Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:23] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:23.208111Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:23] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:23.209631Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:23] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:23.211144Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:15:23.212302Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:23] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:23.212764Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:23] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:38.191205Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:15:38.193183Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:38] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:38.194850Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:38] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:38.196091Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:38] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:38.197223Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:38] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:38.197841Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:38] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:38.198227Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:38] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:38.198543Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:15:38.198775Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:38] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:53.188643Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:15:53.189195Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:53] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:53.190818Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:53] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:53.191334Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:53] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:53.191694Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:53] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:53.192007Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:53] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:53.192158Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:15:53.192524Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:53] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:15:53.192764Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:15:53] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:08.190665Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:16:08.192349Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:08] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:08.203127Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:08] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:08.205279Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:08] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:08.206293Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:08] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:08.210262Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:08] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:08.212051Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:16:08.214551Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:08] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:08.215300Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:08] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:20.194019Z [info     ] engine.cycle_start             [src.engine.loop] cycle_id=3
+2026-02-12T07:16:20.199308Z [info     ] regime.detected                [src.analytics.regime_detector] confidence=0.3 kelly_mult=1.0 regime=NORMAL size_mult=1.0
+2026-02-12T07:16:20.584111Z [info     ] HTTP Request: GET https://gamma-api.polymarket.com/markets?limit=200&offset=0&active=true&closed=false&order=volume&ascending=false "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:16:20.651003Z [info     ] gamma.list_markets             [src.connectors.polymarket_gamma] count=200 offset=0
+2026-02-12T07:16:21.005697Z [info     ] HTTP Request: GET https://gamma-api.polymarket.com/markets?limit=200&offset=0&active=true&closed=false&order=startDate&ascending=false "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:16:21.047112Z [info     ] gamma.list_markets             [src.connectors.polymarket_gamma] count=200 offset=0
+2026-02-12T07:16:21.119000Z [info     ] market_filter.result           [src.engine.market_filter] avg_score=0.0 cooldown=6 hard_rejected=153 passed=0 soft_rejected=1 total=160
+2026-02-12T07:16:21.119094Z [info     ] engine.all_filtered            [src.engine.loop] stats={'total_input': 160, 'hard_rejected': 153, 'soft_rejected': 1, 'cooldown_skipped': 6, 'passed': 0, 'avg_score': 0.0, 'rejection_reasons': {'too_old:31.2h>12h': 1, 'too_old:225.6h>12h': 1, 'too_old:14.2h>12h': 2, 'too_old:184.2h>12h': 1, 'blocked_type:UNKNOWN': 2, 'too_old:1663.9h>12h': 2, 'too_old:2168.1h>12h': 2, 'too_old:122.1h>12h': 1, 'too_old:245.3h>12h': 1, 'too_old:2869.4h>12h': 1, 'too_old:368.0h>12h': 1, 'too_old:55.7h>12h': 1, 'too_old:635.0h>12h': 2, 'too_old:1547.3h>12h': 3, 'too_old:292.9h>12h': 1, 'too_old:3414.9h>12h': 1, 'too_old:5035.0h>12h': 3, 'too_old:345.7h>12h': 1, 'too_old:4011.0h>12h': 1, 'too_old:1471.5h>12h': 2, 'too_old:1213.3h>12h': 1, 'too_old:86.2h>12h': 1, 'too_old:610.7h>12h': 1, 'too_old:228.3h>12h': 1, 'too_old:489.7h>12h': 1, 'not_researchable:SOCIAL_MEDIA/social_posts': 1, 'too_old:128.0h>12h': 1, 'too_old:1880.5h>12h': 1, 'too_old:345.4h>12h': 2, 'too_old:514.6h>12h': 2, 'too_old:2676.1h>12h': 1, 'too_old:199.9h>12h': 2, 'too_old:333.2h>12h': 1, 'too_old:4547.3h>12h': 1, 'too_old:110.2h>12h': 1, 'too_old:295.1h>12h': 1, 'cooldown': 6, 'too_old:177.0h>12h': 1, 'too_old:146.2h>12h': 1, 'too_old:1408.3h>12h': 1, 'extreme_probability:0.03': 1, 'too_old:24.1h>12h': 1, 'too_old:2711.7h>12h': 1, 'too_old:1213.1h>12h': 1, 'too_old:20.2h>12h': 1, 'too_old:62.2h>12h': 2, 'too_old:656.3h>12h': 2, 'too_old:4879.1h>12h': 1, 'too_old:2194.0h>12h': 1, 'too_old:293.0h>12h': 1, 'too_old:878.4h>12h': 1, 'too_old:296.2h>12h': 3, 'too_old:4766.6h>12h': 1, 'too_old:1164.7h>12h': 3, 'too_old:726.6h>12h': 1, 'too_old:128.2h>12h': 1, 'too_old:457.8h>12h': 2, 'too_old:1209.7h>12h': 1, 'too_old:728.1h>12h': 1, 'too_old:207.1h>12h': 1, 'too_old:1397.7h>12h': 1, 'too_old:227.1h>12h': 1, 'too_old:2217.0h>12h': 1, 'too_old:2711.9h>12h': 4, 'too_old:4548.4h>12h': 1, 'too_old:2696.7h>12h': 4, 'too_old:2713.5h>12h': 1, 'too_old:638.9h>12h': 1, 'too_old:562.7h>12h': 1, 'too_old:431.5h>12h': 1, 'too_old:727.6h>12h': 1, 'too_old:3252.2h>12h': 1, 'too_old:392.4h>12h': 1, 'too_old:2175.0h>12h': 1, 'too_old:5172.7h>12h': 1, 'too_old:392.3h>12h': 1, 'too_old:374.5h>12h': 1, 'too_old:1311.3h>12h': 1, 'too_old:970.8h>12h': 1, 'too_old:2361.0h>12h': 1, 'too_old:728.2h>12h': 1, 'too_old:871.1h>12h': 1, 'too_old:3224.0h>12h': 1, 'too_old:15.8h>12h': 1, 'too_old:3415.6h>12h': 1, 'too_old:325.4h>12h': 1, 'too_old:158.2h>12h': 1, 'too_old:1568.2h>12h': 2, 'too_old:1240.0h>12h': 1, 'too_old:3540.3h>12h': 1, 'too_old:160.2h>12h': 1, 'too_old:2318.2h>12h': 1, 'too_old:2282.0h>12h': 1, 'too_old:1880.9h>12h': 3, 'too_old:2713.2h>12h': 1, 'low_score': 1, 'too_old:134.2h>12h': 1, 'too_old:262.2h>12h': 1, 'too_old:1906.0h>12h': 1, 'too_old:828.7h>12h': 1, 'too_old:2192.2h>12h': 1, 'too_old:1186.3h>12h': 1, 'too_old:74.2h>12h': 1, 'too_old:1519.1h>12h': 1, 'too_old:1670.4h>12h': 1, 'too_old:970.7h>12h': 1, 'too_old:177.1h>12h': 1, 'too_old:1236.8h>12h': 1, 'extreme_probability:0.00': 2, 'too_old:290.1h>12h': 1, 'too_old:55.6h>12h': 1, 'extreme_probability:0.02': 1, 'too_old:873.3h>12h': 1, 'too_old:2714.1h>12h': 1, 'too_old:1566.5h>12h': 1, 'too_old:368.5h>12h': 1, 'too_old:128.1h>12h': 1, 'too_old:67.7h>12h': 1, 'too_old:1042.4h>12h': 1, 'too_old:1135.6h>12h': 1, 'too_old:1714.4h>12h': 1, 'too_old:518.7h>12h': 1, 'too_old:345.5h>12h': 1, 'too_old:1663.6h>12h': 1, 'too_old:543.3h>12h': 1}, 'top_passed': []}
+2026-02-12T07:16:21.119177Z [info     ] engine.cycle_complete          [src.engine.loop] cycle_cost_usd=0.0 cycle_id=3 duration=0.93 edges=0 researched=0 scanned=160 status=completed total_cost_usd=0.06 trades=0
+2026-02-12T07:16:21.119728Z [info     ] engine.sleeping                [src.engine.loop] seconds=300
+2026-02-12T07:16:23.198065Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:16:23.200153Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:23] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:23.206555Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:23] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:23.207328Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:23] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:23.209220Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:23] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:23.211519Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:23] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:23.213307Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:23] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:23.213746Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:16:23.214709Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:23] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:38.193217Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:16:38.194514Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:38] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:38.199102Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:38] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:38.200897Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:38] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:38.201516Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:38] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:38.203321Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:38] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:38.203949Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:38] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:38.205743Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:16:38.206546Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:38] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:53.192998Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:16:53.193891Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:53] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:53.199908Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:53] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:53.200835Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:53] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:53.201832Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:53] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:53.202601Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:53] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:53.203322Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:16:53.205358Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:53] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:16:53.207288Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:16:53] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:08.192835Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:17:08.194155Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:08] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:08.197945Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:08] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:08.199679Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:08] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:08.200403Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:08] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:08.201934Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:08] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:08.202557Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:08] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:08.202963Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:17:08.203474Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:08] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:23.198403Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:17:23.201519Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:23] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:23.206425Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:23] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:23.207890Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:23] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:23.210180Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:23] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:23.211873Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:23] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:23.213331Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:23] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:23.213921Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:17:23.214537Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:23] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:38.193775Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:17:38.195876Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:38] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:38.200451Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:38] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:38.202452Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:38] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:38.203065Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:38] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:38.205131Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:38] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:38.205953Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:38] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:38.206160Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:17:38.207272Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:38] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:53.195748Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:17:53.197518Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:53] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:53.202531Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:53] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:53.203208Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:53] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:53.204392Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:53] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:53.205244Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:53] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:53.206066Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:53] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:17:53.206315Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:17:53.206791Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:17:53] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:08.193157Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:18:08.194204Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:08] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:08.198641Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:08] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:08.199399Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:08] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:08.200415Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:08] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:08.203067Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:08] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:08.203288Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:18:08.204438Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:08] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:08.204897Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:08] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:23.194329Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:18:23.195360Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:23] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:23.200458Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:23] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:23.201403Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:23] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:23.202239Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:23] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:23.203456Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:23] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:23.204717Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:18:23.205383Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:23] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:23.205811Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:23] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:38.193210Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:18:38.194394Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:38] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:38.197510Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:38] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:38.198844Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:38] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:38.199368Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:38] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:38.200872Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:38] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:38.201591Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:18:38.202302Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:38] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:38.202635Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:38] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:53.194026Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:18:53.196113Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:53] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:53.200236Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:53] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:53.200976Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:53] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:53.201914Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:53] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:53.204074Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:53] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:53.204481Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:18:53.205587Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:53] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:18:53.205962Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:18:53] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:08.195757Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:19:08.197598Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:08] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:08.201977Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:08] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:08.202622Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:08] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:08.203821Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:08] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:08.205784Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:08] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:08.206799Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:08] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:08.207161Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:19:08.208052Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:08] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:23.195748Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:19:23.197965Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:23] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:23.203070Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:23] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:23.204372Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:23] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:23.204914Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:23] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:23.207060Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:23] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:23.207743Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:23] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:23.208568Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:19:23.209208Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:23] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:38.197236Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:19:38.199106Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:38] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:38.203089Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:38] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:38.204501Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:38] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:38.206641Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:38] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:38.206994Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:19:38.207783Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:38] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:38.208937Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:38] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:38.209834Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:38] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:53.196010Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:19:53.196970Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:53] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:53.201329Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:53] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:53.202008Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:53] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:53.203183Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:53] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:53.204475Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:53] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:53.205364Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:53] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:19:53.205587Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:19:53.206344Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:19:53] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:08.194124Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:20:08.195353Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:08] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:08.197405Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:08] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:08.197658Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:08] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:08.198030Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:08] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:08.198797Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:08] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:08.199047Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:20:08.199496Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:08] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:08.199687Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:08] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:23.871420Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:20:23.874611Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:23] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:23.885262Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:23] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:23.886700Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:23] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:23.888253Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:23] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:23.889695Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:20:23.890308Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:23] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:23.890833Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:23] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:23.891341Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:23] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:38.866877Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:20:38.868546Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:38] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:38.871299Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:38] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:38.872773Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:38] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:38.874641Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:38] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:38.875863Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:38] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:38.876147Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:20:38.877262Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:38] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:38.877657Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:38] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:53.874732Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:20:53.878001Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:53] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:53.882338Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:53] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:53.882885Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:53] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:53.883782Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:53] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:53.884742Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:53] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:53.887735Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:53] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:20:53.887854Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:20:53.889032Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:20:53] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:21:11.883886Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:21:11.885145Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:21:11] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:21:11.892746Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:21:11] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:21:11.897228Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:21:11] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:21:11.899147Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:21:11] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:21:11.905431Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:21:11] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:21:11.907405Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:21:11] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:21:11.909002Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:21:11.912250Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:21:11] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:21:21.125107Z [info     ] engine.cycle_start             [src.engine.loop] cycle_id=4
+2026-02-12T07:21:21.127139Z [info     ] regime.detected                [src.analytics.regime_detector] confidence=0.3 kelly_mult=1.0 regime=NORMAL size_mult=1.0
+2026-02-12T07:21:21.468065Z [info     ] HTTP Request: GET https://gamma-api.polymarket.com/markets?limit=200&offset=0&active=true&closed=false&order=volume&ascending=false "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:21:21.515317Z [info     ] gamma.list_markets             [src.connectors.polymarket_gamma] count=200 offset=0
+2026-02-12T07:21:21.995987Z [info     ] HTTP Request: GET https://gamma-api.polymarket.com/markets?limit=200&offset=0&active=true&closed=false&order=startDate&ascending=false "HTTP/1.1 200 OK" [httpx]
+2026-02-12T07:21:22.549495Z [info     ] gamma.list_markets             [src.connectors.polymarket_gamma] count=200 offset=0
+2026-02-12T07:21:22.626049Z [info     ] market_filter.result           [src.engine.market_filter] avg_score=0.0 cooldown=6 hard_rejected=155 passed=0 soft_rejected=0 total=161
+2026-02-12T07:21:22.626135Z [info     ] engine.all_filtered            [src.engine.loop] stats={'total_input': 161, 'hard_rejected': 155, 'soft_rejected': 0, 'cooldown_skipped': 6, 'passed': 0, 'avg_score': 0.0, 'rejection_reasons': {'too_old:122.2h>12h': 1, 'too_old:31.3h>12h': 1, 'too_old:225.7h>12h': 1, 'too_old:14.3h>12h': 2, 'too_old:184.3h>12h': 1, 'blocked_type:UNKNOWN': 2, 'too_old:1664.0h>12h': 2, 'too_old:2168.2h>12h': 2, 'too_old:2869.5h>12h': 1, 'too_old:368.0h>12h': 1, 'too_old:55.8h>12h': 1, 'too_old:635.1h>12h': 2, 'too_old:1547.4h>12h': 3, 'too_old:293.0h>12h': 1, 'too_old:3415.0h>12h': 1, 'too_old:5035.1h>12h': 3, 'too_old:345.7h>12h': 1, 'too_old:4011.1h>12h': 1, 'too_old:1471.6h>12h': 2, 'too_old:1213.3h>12h': 1, 'not_researchable:SOCIAL_MEDIA/social_posts': 1, 'too_old:86.3h>12h': 1, 'too_old:610.8h>12h': 1, 'too_old:130.1h>12h': 1, 'too_old:489.8h>12h': 1, 'too_old:128.1h>12h': 1, 'too_old:1880.6h>12h': 1, 'too_old:345.4h>12h': 1, 'too_old:514.7h>12h': 2, 'too_old:2676.2h>12h': 1, 'too_old:200.0h>12h': 2, 'too_old:333.3h>12h': 1, 'too_old:4547.4h>12h': 1, 'too_old:110.3h>12h': 1, 'too_old:295.2h>12h': 1, 'cooldown': 6, 'too_old:146.3h>12h': 1, 'too_old:177.1h>12h': 1, 'too_old:1408.4h>12h': 1, 'extreme_probability:0.03': 1, 'too_old:2711.8h>12h': 1, 'too_old:1213.2h>12h': 1, 'too_old:20.3h>12h': 1, 'too_old:62.3h>12h': 2, 'too_old:656.4h>12h': 2, 'too_old:4879.2h>12h': 1, 'too_old:2194.1h>12h': 1, 'too_old:293.1h>12h': 1, 'too_old:878.5h>12h': 1, 'too_old:296.3h>12h': 2, 'too_old:4766.7h>12h': 1, 'too_old:1164.7h>12h': 4, 'too_old:726.6h>12h': 1, 'too_old:128.2h>12h': 2, 'too_old:457.9h>12h': 2, 'too_old:1209.8h>12h': 1, 'too_old:728.2h>12h': 1, 'too_old:207.2h>12h': 1, 'too_old:1397.8h>12h': 1, 'too_old:227.2h>12h': 1, 'too_old:2217.1h>12h': 1, 'too_old:2712.0h>12h': 4, 'too_old:4548.5h>12h': 1, 'too_old:2696.7h>12h': 4, 'too_old:2713.6h>12h': 1, 'too_old:639.0h>12h': 1, 'too_old:562.8h>12h': 1, 'too_old:431.6h>12h': 1, 'too_old:727.7h>12h': 1, 'too_old:3252.2h>12h': 1, 'too_old:392.4h>12h': 2, 'too_old:2175.0h>12h': 1, 'too_old:5172.7h>12h': 1, 'too_old:374.5h>12h': 1, 'too_old:1311.4h>12h': 1, 'too_old:970.8h>12h': 2, 'too_old:158.3h>12h': 1, 'too_old:2361.1h>12h': 1, 'too_old:728.3h>12h': 1, 'too_old:871.1h>12h': 1, 'too_old:3224.1h>12h': 1, 'too_old:15.8h>12h': 1, 'too_old:3415.7h>12h': 1, 'too_old:325.5h>12h': 1, 'too_old:1568.3h>12h': 2, 'too_old:1240.0h>12h': 1, 'too_old:3540.3h>12h': 1, 'too_old:345.5h>12h': 1, 'too_old:2318.3h>12h': 1, 'too_old:2282.1h>12h': 1, 'too_old:1881.0h>12h': 3, 'too_old:2713.3h>12h': 1, 'too_old:134.3h>12h': 1, 'too_old:262.3h>12h': 1, 'too_old:1906.1h>12h': 1, 'too_old:828.8h>12h': 1, 'too_old:2192.3h>12h': 1, 'too_old:1186.4h>12h': 1, 'too_old:74.3h>12h': 1, 'too_old:266.3h>12h': 1, 'too_old:1519.1h>12h': 1, 'too_old:1670.5h>12h': 1, 'too_old:177.2h>12h': 1, 'too_old:1236.9h>12h': 1, 'extreme_probability:0.00': 2, 'extreme_probability:0.02': 1, 'too_old:290.2h>12h': 1, 'too_old:55.7h>12h': 1, 'too_old:1663.7h>12h': 1, 'too_old:873.3h>12h': 1, 'too_old:2714.1h>12h': 1, 'too_old:1566.6h>12h': 1, 'too_old:368.6h>12h': 1, 'too_old:67.8h>12h': 1, 'too_old:1042.5h>12h': 1, 'too_old:1135.7h>12h': 1, 'too_old:1714.5h>12h': 1, 'too_old:296.2h>12h': 1, 'too_old:518.7h>12h': 1, 'too_old:345.6h>12h': 1, 'too_old:20.1h>12h': 1, 'too_old:543.3h>12h': 1, 'too_old:868.8h>12h': 1, 'too_old:1208.3h>12h': 1}, 'top_passed': []}
+2026-02-12T07:21:22.626219Z [info     ] engine.cycle_complete          [src.engine.loop] cycle_cost_usd=0.0 cycle_id=4 duration=1.5 edges=0 researched=0 scanned=161 status=completed total_cost_usd=0.06 trades=0
+2026-02-12T07:21:22.626762Z [info     ] engine.sleeping                [src.engine.loop] seconds=300
+2026-02-12T07:22:11.891816Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:22:11.893405Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:22:11] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:22:11.899439Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:22:11] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:22:11.900085Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:22:11] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:22:11.901038Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:22:11] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:22:11.901898Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:22:11] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:22:11.902379Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:22:11] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:22:11.902452Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:22:11.902985Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:22:11] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:23:11.901839Z [info     ] portfolio_risk.assessed        [src.policy.portfolio_risk] category_violations=0 healthy=True num_positions=1 total_exposure=50.0
+2026-02-12T07:23:11.903138Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:23:11] "GET /api/engine-status HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:23:11.906442Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:23:11] "GET /api/performance HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:23:11.910484Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:23:11] "GET /api/market-types HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:23:11.911002Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:23:11] "GET /api/drawdown HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:23:11.914643Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:23:11] "GET /api/portfolio HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:23:11.908558Z [info     ] performance_tracker.open_position_fallback [src.analytics.performance_tracker] categories=1 positions=1 total_pnl=-0.5
+2026-02-12T07:23:11.915373Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:23:11] "GET /api/regime HTTP/1.1" 200 - [werkzeug]
+2026-02-12T07:23:11.919282Z [info     ] 127.0.0.1 - - [12/Feb/2026 01:23:11] "GET /api/equity-curve HTTP/1.1" 200 - [werkzeug]

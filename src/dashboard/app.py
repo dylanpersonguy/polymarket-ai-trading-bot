@@ -148,7 +148,8 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS positions (
             market_id TEXT PRIMARY KEY, token_id TEXT, direction TEXT,
             entry_price REAL, size REAL, stake_usd REAL,
-            current_price REAL, pnl REAL, opened_at TEXT
+            current_price REAL, pnl REAL, opened_at TEXT,
+            question TEXT, market_type TEXT
         );
         CREATE TABLE IF NOT EXISTS engine_state (
             key TEXT PRIMARY KEY, value TEXT, updated_at TEXT
@@ -403,6 +404,173 @@ def api_positions() -> Any:
                 "flat": sum(1 for p in positions if (p.get("pnl") or 0) == 0),
             },
         })
+    finally:
+        conn.close()
+
+
+# ─── API: Position Detail ──────────────────────────────────────────
+
+@app.route("/api/positions/<market_id>")
+def api_position_detail(market_id: str) -> Any:
+    """Return comprehensive detail for a single active position."""
+    conn = _get_conn()
+    _ensure_tables(conn)
+    try:
+        cfg = _get_config()
+        sl_pct = cfg.risk.stop_loss_pct
+        tp_pct = cfg.risk.take_profit_pct
+        max_hold_hours = getattr(cfg.risk, "max_holding_hours", 72.0)
+
+        # ── Position + market data ───────────────────────────────
+        row = conn.execute("""
+            SELECT p.*, m.question AS mkt_question, m.market_type AS mkt_type,
+                   m.category, m.volume, m.liquidity, m.end_date,
+                   m.resolution_source
+            FROM positions p
+            LEFT JOIN markets m ON p.market_id = m.id
+            WHERE p.market_id = ?
+        """, (market_id,)).fetchone()
+
+        if not row:
+            return jsonify({"error": "Position not found"}), 404
+
+        pos = dict(row)
+        entry = float(pos.get("entry_price") or 0)
+        current = float(pos.get("current_price") or 0)
+        stake = float(pos.get("stake_usd") or 0)
+        pnl = float(pos.get("pnl") or 0)
+        size = float(pos.get("size") or 0)
+        direction = pos.get("direction") or ""
+
+        # Prefer market table question, fall back to position question
+        question = pos.get("mkt_question") or pos.get("question") or pos.get("market_id", "")
+        market_type = pos.get("mkt_type") or pos.get("market_type") or "—"
+
+        # ── P&L calculations ─────────────────────────────────────
+        pnl_pct = (pnl / stake * 100) if stake > 0 else 0.0
+
+        # ── Holding duration ─────────────────────────────────────
+        holding_hours = 0.0
+        holding_label = "—"
+        opened_at = pos.get("opened_at", "")
+        if opened_at:
+            try:
+                opened = dt.datetime.fromisoformat(opened_at.replace("Z", "+00:00"))
+                delta = dt.datetime.now(dt.timezone.utc) - opened
+                holding_hours = delta.total_seconds() / 3600
+                if holding_hours >= 24:
+                    days = holding_hours / 24
+                    holding_label = f"{days:.1f} days ({holding_hours:.0f}h)"
+                else:
+                    holding_label = f"{holding_hours:.1f} hours"
+            except (ValueError, TypeError):
+                pass
+
+        # ── TP/SL proximity ──────────────────────────────────────
+        # How close (as %) to hitting stop loss or take profit
+        sl_trigger_pnl_pct = -sl_pct * 100  # e.g. -20%
+        tp_trigger_pnl_pct = tp_pct * 100   # e.g. +30%
+
+        # Distance to SL/TP as fraction of the full range
+        # SL: how far along from 0% → -sl_pct we are (0=fresh, 1=hit)
+        sl_proximity = 0.0
+        if sl_pct > 0 and pnl_pct < 0:
+            sl_proximity = min(abs(pnl_pct) / (sl_pct * 100), 1.0)
+        # TP: how far along from 0% → +tp_pct we are (0=fresh, 1=hit)
+        tp_proximity = 0.0
+        if tp_pct > 0 and pnl_pct > 0:
+            tp_proximity = min(pnl_pct / (tp_pct * 100), 1.0)
+
+        # SL/TP in price terms
+        if direction in ("BUY_YES", "BUY"):
+            sl_price = entry * (1 - sl_pct) if sl_pct > 0 else None
+            tp_price = entry * (1 + tp_pct) if tp_pct > 0 else None
+        else:
+            sl_price = entry * (1 + sl_pct) if sl_pct > 0 else None
+            tp_price = entry * (1 - tp_pct) if tp_pct > 0 else None
+
+        # ── Max holding period ───────────────────────────────────
+        holding_pct = (holding_hours / max_hold_hours * 100) if max_hold_hours > 0 else 0.0
+        time_remaining_hours = max(max_hold_hours - holding_hours, 0) if max_hold_hours > 0 else None
+
+        # ── Latest forecast for this market ──────────────────────
+        fc_row = conn.execute("""
+            SELECT model_probability, implied_probability, edge,
+                   confidence_level, evidence_quality, num_sources,
+                   decision, reasoning, created_at
+            FROM forecasts
+            WHERE market_id = ?
+            ORDER BY created_at DESC LIMIT 1
+        """, (market_id,)).fetchone()
+        forecast = dict(fc_row) if fc_row else None
+
+        # ── Entry trade info ─────────────────────────────────────
+        trade_row = conn.execute("""
+            SELECT id, order_id, side, price, size, stake_usd, status,
+                   dry_run, created_at
+            FROM trades
+            WHERE market_id = ? AND side != 'SELL'
+            ORDER BY created_at DESC LIMIT 1
+        """, (market_id,)).fetchone()
+        entry_trade = dict(trade_row) if trade_row else None
+
+        # ── Build response ───────────────────────────────────────
+        result = {
+            "market_id": market_id,
+            "question": question,
+            "market_type": market_type,
+            "category": pos.get("category") or "—",
+            "direction": direction,
+            "token_id": pos.get("token_id") or "",
+
+            # Price & P&L
+            "entry_price": round(entry, 4),
+            "current_price": round(current, 4),
+            "price_change": round(current - entry, 4),
+            "price_change_pct": round(((current - entry) / entry * 100) if entry > 0 else 0, 2),
+            "size": round(size, 2),
+            "stake_usd": round(stake, 2),
+            "pnl": round(pnl, 4),
+            "pnl_pct": round(pnl_pct, 2),
+
+            # Market info
+            "volume": round(float(pos.get("volume") or 0), 2),
+            "liquidity": round(float(pos.get("liquidity") or 0), 2),
+            "end_date": pos.get("end_date") or "—",
+            "resolution_source": pos.get("resolution_source") or "—",
+
+            # Time info
+            "opened_at": opened_at,
+            "holding_hours": round(holding_hours, 1),
+            "holding_label": holding_label,
+            "max_holding_hours": max_hold_hours,
+            "holding_pct": round(holding_pct, 1),
+            "time_remaining_hours": round(time_remaining_hours, 1) if time_remaining_hours is not None else None,
+
+            # TP/SL
+            "stop_loss_pct": sl_pct,
+            "take_profit_pct": tp_pct,
+            "sl_trigger_pnl_pct": round(sl_trigger_pnl_pct, 1),
+            "tp_trigger_pnl_pct": round(tp_trigger_pnl_pct, 1),
+            "sl_proximity": round(sl_proximity, 3),
+            "tp_proximity": round(tp_proximity, 3),
+            "sl_price": round(sl_price, 4) if sl_price is not None else None,
+            "tp_price": round(tp_price, 4) if tp_price is not None else None,
+
+            # Forecast
+            "forecast": forecast,
+
+            # Entry trade
+            "entry_trade": entry_trade,
+
+            # Polymarket link
+            "polymarket_url": f"https://polymarket.com/event/{market_id}",
+        }
+
+        return jsonify(result)
+
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
     finally:
         conn.close()
 

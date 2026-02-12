@@ -127,6 +127,181 @@ function closeModal() {
     _modalConfirmCb = null;
 }
 
+// ─── Position Detail Modal ──────────────────────────────────────
+async function openPositionDetail(marketId) {
+    const overlay = $('#position-detail-overlay');
+    const body = $('#pos-detail-body');
+    const badges = $('#pos-detail-badges');
+    const footer = $('#pos-detail-footer');
+    const titleEl = $('#pos-detail-question');
+
+    titleEl.textContent = 'Loading…';
+    safeHTML(badges, '');
+    safeHTML(body, '<div class="pos-detail-loading">Loading position data…</div>');
+    safeHTML(footer, '');
+    overlay.style.display = 'flex';
+
+    const d = await apiFetch(`/api/positions/${encodeURIComponent(marketId)}`);
+    if (!d || d.error) {
+        safeHTML(body, `<div class="pos-detail-loading">❌ ${d?.error || 'Failed to load position data'}</div>`);
+        titleEl.textContent = 'Error';
+        return;
+    }
+
+    // Header
+    titleEl.textContent = d.question || d.market_id;
+    const dirBuy = d.direction === 'BUY_YES' || d.direction === 'BUY';
+    safeHTML(badges, `
+        <span class="pos-detail-badge ${dirBuy ? 'badge-direction-buy' : 'badge-direction-sell'}">${d.direction || '—'}</span>
+        <span class="pos-detail-badge badge-type">${d.market_type || '—'}</span>
+        ${d.category && d.category !== '—' ? `<span class="pos-detail-badge badge-cat">${d.category}</span>` : ''}
+    `);
+
+    // Build body sections
+    const pnlCls = d.pnl > 0.001 ? 'pnl-positive' : d.pnl < -0.001 ? 'pnl-negative' : 'pnl-zero';
+    const priceCls = d.price_change > 0 ? 'pnl-positive' : d.price_change < 0 ? 'pnl-negative' : 'pnl-zero';
+
+    // TP/SL bar colors & widths
+    const slPct = Math.min((d.sl_proximity || 0) * 100, 100);
+    const tpPct = Math.min((d.tp_proximity || 0) * 100, 100);
+    const holdPct = Math.min(d.holding_pct || 0, 100);
+    const holdBarColor = holdPct > 80 ? 'bar-red' : holdPct > 50 ? 'bar-orange' : 'bar-blue';
+
+    // Forecast section
+    const fc = d.forecast;
+    let forecastHTML = '<div class="pd-section"><div class="pd-section-title">🔮 Latest Forecast</div><div style="color:var(--text-muted);font-size:0.82rem;">No forecast data available</div></div>';
+    if (fc) {
+        const edgeCls = (fc.edge||0) > 0 ? 'pnl-positive' : 'pnl-negative';
+        forecastHTML = `
+        <div class="pd-section">
+            <div class="pd-section-title">🔮 Latest Forecast</div>
+            <div class="pd-grid">
+                <div class="pd-field"><span class="pd-label">Model Prob</span><span class="pd-value">${fmtP((fc.model_probability||0)*100)}</span></div>
+                <div class="pd-field"><span class="pd-label">Implied Prob</span><span class="pd-value">${fmtP((fc.implied_probability||0)*100)}</span></div>
+                <div class="pd-field"><span class="pd-label">Edge</span><span class="pd-value ${edgeCls}">${fmtP((fc.edge||0)*100)}</span></div>
+                <div class="pd-field"><span class="pd-label">Confidence</span><span class="pd-value">${fc.confidence_level||'—'}</span></div>
+                <div class="pd-field"><span class="pd-label">Evidence Quality</span><span class="pd-value">${fmt(fc.evidence_quality||0, 3)}</span></div>
+                <div class="pd-field"><span class="pd-label">Sources</span><span class="pd-value">${fc.num_sources||0}</span></div>
+            </div>
+            ${fc.reasoning ? `<div class="pd-reasoning">${escapeHTML(fc.reasoning)}</div>` : ''}
+        </div>`;
+    }
+
+    // Entry trade section
+    let entryTradeHTML = '';
+    if (d.entry_trade) {
+        const et = d.entry_trade;
+        entryTradeHTML = `
+        <div class="pd-section">
+            <div class="pd-section-title">📝 Entry Trade</div>
+            <div class="pd-grid">
+                <div class="pd-field"><span class="pd-label">Side</span><span class="pd-value">${et.side||'—'}</span></div>
+                <div class="pd-field"><span class="pd-label">Price</span><span class="pd-value">${fmt(et.price||0, 4)}</span></div>
+                <div class="pd-field"><span class="pd-label">Size</span><span class="pd-value">${fmt(et.size||0, 1)}</span></div>
+                <div class="pd-field"><span class="pd-label">Stake</span><span class="pd-value">${fmtD(et.stake_usd||0)}</span></div>
+                <div class="pd-field"><span class="pd-label">Status</span><span class="pd-value">${et.status||'—'}</span></div>
+                <div class="pd-field"><span class="pd-label">Mode</span><span class="pd-value">${et.dry_run ? 'Paper' : 'Live'}</span></div>
+            </div>
+        </div>`;
+    }
+
+    const timeRem = d.time_remaining_hours != null
+        ? (d.time_remaining_hours >= 24 ? `${(d.time_remaining_hours/24).toFixed(1)}d` : `${d.time_remaining_hours.toFixed(1)}h`)
+        : '—';
+
+    safeHTML(body, `
+        <!-- Price & P&L -->
+        <div class="pd-section">
+            <div class="pd-section-title">💰 Price & P&L</div>
+            <div class="pd-grid">
+                <div class="pd-field"><span class="pd-label">Entry Price</span><span class="pd-value big">${fmt(d.entry_price, 4)}</span></div>
+                <div class="pd-field"><span class="pd-label">Current Price</span><span class="pd-value big ${priceCls}">${fmt(d.current_price, 4)}</span></div>
+                <div class="pd-field"><span class="pd-label">Price Change</span><span class="pd-value ${priceCls}">${d.price_change >= 0 ? '+' : ''}${fmt(d.price_change, 4)} (${fmtP(d.price_change_pct)})</span></div>
+                <div class="pd-field"><span class="pd-label">P&L</span><span class="pd-value big ${pnlCls}">${d.pnl >= 0 ? '+' : ''}${fmtD(d.pnl)}</span></div>
+                <div class="pd-field"><span class="pd-label">P&L %</span><span class="pd-value ${pnlCls}">${d.pnl_pct >= 0 ? '+' : ''}${fmtP(d.pnl_pct)}</span></div>
+            </div>
+            <div class="pd-grid" style="margin-top:10px;">
+                <div class="pd-field"><span class="pd-label">Size</span><span class="pd-value">${fmt(d.size, 2)}</span></div>
+                <div class="pd-field"><span class="pd-label">Stake</span><span class="pd-value">${fmtD(d.stake_usd)}</span></div>
+            </div>
+        </div>
+
+        <!-- TP/SL Proximity -->
+        <div class="pd-section">
+            <div class="pd-section-title">🎯 Risk Levels & Proximity</div>
+
+            <div class="pd-bar-group">
+                <div class="pd-bar-header">
+                    <span class="pd-bar-label">🟢 Take Profit (${fmtP(d.take_profit_pct * 100)})</span>
+                    <span class="pd-bar-value pnl-positive">${fmtP(tpPct)} reached</span>
+                </div>
+                <div class="pd-bar-track"><div class="pd-bar-fill bar-green" style="width:${tpPct}%"></div></div>
+                <div class="pd-bar-sub">TP triggers at ${fmtP(d.tp_trigger_pnl_pct)} P&L${d.tp_price != null ? ` · TP price: ${fmt(d.tp_price, 4)}` : ''} · Current P&L: ${fmtP(d.pnl_pct)}</div>
+            </div>
+
+            <div class="pd-bar-group">
+                <div class="pd-bar-header">
+                    <span class="pd-bar-label">🔴 Stop Loss (${fmtP(d.stop_loss_pct * 100)})</span>
+                    <span class="pd-bar-value pnl-negative">${fmtP(slPct)} reached</span>
+                </div>
+                <div class="pd-bar-track"><div class="pd-bar-fill bar-red" style="width:${slPct}%"></div></div>
+                <div class="pd-bar-sub">SL triggers at ${fmtP(d.sl_trigger_pnl_pct)} P&L${d.sl_price != null ? ` · SL price: ${fmt(d.sl_price, 4)}` : ''} · Current P&L: ${fmtP(d.pnl_pct)}</div>
+            </div>
+
+            <div class="pd-bar-group">
+                <div class="pd-bar-header">
+                    <span class="pd-bar-label">⏱️ Holding Period (${d.max_holding_hours}h max)</span>
+                    <span class="pd-bar-value" style="color:${holdPct > 80 ? 'var(--accent-red)' : holdPct > 50 ? 'var(--accent-orange)' : 'var(--accent-blue)'}">${fmtP(holdPct)}</span>
+                </div>
+                <div class="pd-bar-track"><div class="pd-bar-fill ${holdBarColor}" style="width:${holdPct}%"></div></div>
+                <div class="pd-bar-sub">Held: ${d.holding_label} · Remaining: ${timeRem}</div>
+            </div>
+        </div>
+
+        <!-- Market Info -->
+        <div class="pd-section">
+            <div class="pd-section-title">📊 Market Info</div>
+            <div class="pd-grid">
+                <div class="pd-field"><span class="pd-label">Volume</span><span class="pd-value">${fmtD(d.volume)}</span></div>
+                <div class="pd-field"><span class="pd-label">Liquidity</span><span class="pd-value">${fmtD(d.liquidity)}</span></div>
+                <div class="pd-field"><span class="pd-label">End Date</span><span class="pd-value" style="font-size:0.8rem;">${d.end_date || '—'}</span></div>
+                <div class="pd-field"><span class="pd-label">Resolution</span><span class="pd-value" style="font-size:0.8rem;">${d.resolution_source || '—'}</span></div>
+            </div>
+        </div>
+
+        ${forecastHTML}
+        ${entryTradeHTML}
+    `);
+
+    // Footer
+    safeHTML(footer, `
+        <a href="${d.polymarket_url}" target="_blank" rel="noopener">🔗 View on Polymarket ↗</a>
+        <span class="pos-detail-id" title="${d.market_id}">${d.market_id}</span>
+    `);
+}
+
+function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+}
+
+function closePositionDetail(event) {
+    // If called from overlay click, only close if clicking the overlay itself
+    if (event && event.target !== event.currentTarget) return;
+    $('#position-detail-overlay').style.display = 'none';
+}
+
+// Close position detail on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const overlay = $('#position-detail-overlay');
+        if (overlay && overlay.style.display === 'flex') {
+            overlay.style.display = 'none';
+        }
+    }
+});
+
 // ─── Table Search / Filter ──────────────────────────────────────
 function filterTable(tbodyId, query) {
     const tbody = document.getElementById(tbodyId);
@@ -326,7 +501,7 @@ async function updatePositions() {
         const hoursHeld = p.hours_held || 0;
         const timeLabel = hoursHeld >= 24 ? `${(hoursHeld/24).toFixed(1)}d` : `${hoursHeld.toFixed(1)}h`;
 
-        return `<tr class="position-row ${pnlClass(pnl)}">
+        return `<tr class="position-row ${pnlClass(pnl)}" onclick="openPositionDetail('${(p.market_id||'').replace(/'/g, "\\'")}')">
             <td title="${p.market_id}">${(p.question||p.market_id||'').substring(0,50)}</td>
             <td>${p.market_type||'—'}</td>
             <td><span class="pill ${p.direction==='BUY_YES'||p.direction==='BUY'?'pill-buy':'pill-sell'}">${p.direction||'—'}</span></td>
