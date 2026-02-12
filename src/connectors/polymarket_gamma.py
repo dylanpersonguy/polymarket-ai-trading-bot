@@ -68,6 +68,7 @@ class GammaMarket(BaseModel):
     category: str = ""
     market_type: str = ""  # MACRO | ELECTION | CORPORATE | WEATHER | SPORTS | UNKNOWN
     end_date: dt.datetime | None = None
+    created_at: dt.datetime | None = None  # When the market started trading
     active: bool = True
     closed: bool = False
     volume: float = 0.0
@@ -76,6 +77,17 @@ class GammaMarket(BaseModel):
     resolution_source: str = ""
     slug: str = ""
     raw: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def age_hours(self) -> float | None:
+        """Hours since the market started trading.  None if unknown."""
+        if self.created_at is None:
+            return None
+        now = dt.datetime.now(dt.timezone.utc)
+        ca = self.created_at
+        if ca.tzinfo is None:
+            ca = ca.replace(tzinfo=dt.timezone.utc)
+        return max(0.0, (now - ca).total_seconds() / 3600.0)
 
     @property
     def best_bid(self) -> float:
@@ -191,14 +203,30 @@ async def fetch_active_markets(
 ) -> list[GammaMarket]:
     """Fetch active markets, optionally filtering by minimum volume.
 
-    This is a convenience wrapper used by the trading engine.
+    Fetches two batches — one sorted by volume (established markets) and
+    one sorted by newest first — then de-duplicates so brand-new markets
+    are never missed.
     """
     client = GammaClient()
     try:
-        markets = await client.list_markets(limit=limit, active=True, closed=False)
+        # Batch 1: highest-volume markets (established liquidity)
+        by_volume = await client.list_markets(
+            limit=limit, active=True, closed=False, order="volume",
+        )
+        # Batch 2: newest markets (fresh opportunities)
+        by_newest = await client.list_markets(
+            limit=limit, active=True, closed=False, order="startDate",
+        )
+        # Merge & deduplicate (preserve order: newest first, then volume)
+        seen: set[str] = set()
+        merged: list[GammaMarket] = []
+        for m in by_newest + by_volume:
+            if m.id not in seen:
+                seen.add(m.id)
+                merged.append(m)
         if min_volume > 0:
-            markets = [m for m in markets if m.volume >= min_volume]
-        return markets
+            merged = [m for m in merged if m.volume >= min_volume]
+        return merged
     finally:
         await client.close()
 
@@ -265,6 +293,22 @@ def parse_market(raw: dict[str, Any]) -> GammaMarket:
         except (ValueError, TypeError):
             pass
 
+    # ── Market creation / start date ─────────────────────────────
+    # Prefer startDate (when trading opened) > acceptingOrdersTimestamp > createdAt
+    created_raw = (
+        raw.get("startDate")
+        or raw.get("acceptingOrdersTimestamp")
+        or raw.get("createdAt")
+    )
+    created_at = None
+    if created_raw:
+        try:
+            created_at = dt.datetime.fromisoformat(
+                str(created_raw).replace("Z", "+00:00")
+            )
+        except (ValueError, TypeError):
+            pass
+
     question = raw.get("question", raw.get("title", ""))
     category = raw.get("category", raw.get("tag", ""))
     description = raw.get("description", "")
@@ -278,6 +322,7 @@ def parse_market(raw: dict[str, Any]) -> GammaMarket:
         category=category,
         market_type=market_type,
         end_date=end_date,
+        created_at=created_at,
         active=bool(raw.get("active", True)),
         closed=bool(raw.get("closed", False)),
         volume=float(raw.get("volume", raw.get("volumeNum", 0))),

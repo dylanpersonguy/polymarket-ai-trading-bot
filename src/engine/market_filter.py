@@ -121,7 +121,8 @@ _BLOCKED_TYPES: set[str] = {"UNKNOWN"}
 
 
 def _hard_reject(market: Any, blocked_types: set[str] | None = None,
-                 classification: MarketClassification | None = None) -> Optional[str]:
+                 classification: MarketClassification | None = None,
+                 max_market_age_hours: float | None = None) -> Optional[str]:
     """Return rejection reason string, or None if the market passes."""
     # No token IDs → can't trade
     if not getattr(market, "tokens", None):
@@ -134,6 +135,12 @@ def _hard_reject(market: Any, blocked_types: set[str] | None = None,
     # Market not active
     if not getattr(market, "active", True):
         return "market_inactive"
+
+    # ── Market too old ───────────────────────────────────────────
+    if max_market_age_hours is not None and max_market_age_hours > 0:
+        age = getattr(market, "age_hours", None)
+        if age is not None and age > max_market_age_hours:
+            return f"too_old:{age:.1f}h>{max_market_age_hours:.0f}h"
 
     # Blocked market type (legacy)
     types = blocked_types if blocked_types is not None else _BLOCKED_TYPES
@@ -281,6 +288,20 @@ def _score_market(market: Any, preferred_types: list[str] | None = None,
         if "scheduled_event" in classification.tags:
             breakdown["scheduled_event"] = 8
 
+    # ── Freshness bonus — younger markets are prioritised ────────────
+    age = getattr(market, "age_hours", None)
+    if age is not None:
+        if age <= 1:
+            breakdown["freshness"] = 20   # brand-new
+        elif age <= 3:
+            breakdown["freshness"] = 15
+        elif age <= 6:
+            breakdown["freshness"] = 10
+        elif age <= 12:
+            breakdown["freshness"] = 5
+        else:
+            breakdown["freshness"] = 0    # older (but not hard-rejected)
+
     total = max(0, min(100, base + sum(breakdown.values())))
     return total, breakdown
 
@@ -291,6 +312,7 @@ def score_market(
     market: Any,
     blocked_types: set[str] | None = None,
     preferred_types: list[str] | None = None,
+    max_market_age_hours: float | None = None,
 ) -> FilterResult:
     """Score a single market.  Hard rejections get score=0."""
     market_id = getattr(market, "id", "?")
@@ -301,7 +323,8 @@ def score_market(
     classification = classify_market(question, description)
 
     rejection = _hard_reject(market, blocked_types=blocked_types,
-                             classification=classification)
+                             classification=classification,
+                             max_market_age_hours=max_market_age_hours)
     if rejection:
         return FilterResult(
             market_id=market_id, question=question,
@@ -325,17 +348,26 @@ def filter_markets(
     research_cache: ResearchCache | None = None,
     blocked_types: set[str] | None = None,
     preferred_types: list[str] | None = None,
+    max_market_age_hours: float | None = None,
 ) -> tuple[list[Any], FilterStats]:
     """Filter and rank markets, returning only the best candidates.
+
+    Markets older than *max_market_age_hours* are hard-rejected.
+    Remaining candidates are sorted by score (desc) then age (youngest
+    first) so newer markets are prioritised when scores are equal.
 
     Returns:
         (passed_markets, stats)
     """
     stats = FilterStats(total_input=len(markets))
-    scored: list[tuple[int, Any, FilterResult]] = []
+    scored: list[tuple[int, float, Any, FilterResult]] = []  # (score, age_hours, market, fr)
 
     for m in markets:
-        fr = score_market(m, blocked_types=blocked_types, preferred_types=preferred_types)
+        fr = score_market(
+            m, blocked_types=blocked_types,
+            preferred_types=preferred_types,
+            max_market_age_hours=max_market_age_hours,
+        )
 
         if not fr.passed:
             stats.hard_rejected += 1
@@ -359,19 +391,20 @@ def filter_markets(
             )
             continue
 
-        scored.append((fr.score, m, fr))
+        age = getattr(m, "age_hours", None) or 9999.0
+        scored.append((fr.score, age, m, fr))
 
-    # Sort by score descending
-    scored.sort(key=lambda x: x[0], reverse=True)
+    # Sort by score descending, then by age ascending (youngest first)
+    scored.sort(key=lambda x: (-x[0], x[1]))
     top = scored[:max_pass]
 
     stats.passed = len(top)
     if scored:
-        stats.avg_score = sum(s for s, _, _ in scored) / len(scored)
+        stats.avg_score = sum(s for s, _, _, _ in scored) / len(scored)
     stats.top_passed = [
         {"market_id": fr.market_id, "question": fr.question[:80],
          "score": fr.score, "breakdown": fr.breakdown}
-        for _, _, fr in top
+        for _, _, _, fr in top
     ]
 
     log.info(
@@ -384,4 +417,4 @@ def filter_markets(
         avg_score=round(stats.avg_score, 1),
     )
 
-    return [m for _, m, _ in top], stats
+    return [m for _, _, m, _ in top], stats

@@ -26,6 +26,7 @@ class ScanningConfig(BaseModel):
     min_liquidity_usd: float = 1000
     max_spread: float = 0.05
     max_days_to_expiry: int = 90
+    max_market_age_hours: float = 12.0  # Only analyse markets younger than this
     categories: list[str] = Field(default_factory=list)
     batch_size: int = 50
     preferred_types: list[str] = Field(default_factory=lambda: ["MACRO", "ELECTION", "CORPORATE"])

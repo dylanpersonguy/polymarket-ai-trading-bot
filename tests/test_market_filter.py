@@ -37,6 +37,7 @@ class FakeMarket:
             question="Will the Federal Reserve cut interest rates?",
             description="", category="", market_type="MACRO",
             end_date=dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=30),
+            created_at=dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=2),
             active=True, closed=False, volume=50_000.0, liquidity=20_000.0,
             tokens=[FakeToken()], resolution_source="https://example.com/source",
             slug="will-x-happen", best_bid=0.5, spread=0.02,
@@ -44,6 +45,16 @@ class FakeMarket:
         defaults.update(kwargs)
         for k, v in defaults.items():
             setattr(self, k, v)
+
+    @property
+    def age_hours(self):
+        if self.created_at is None:
+            return None
+        now = dt.datetime.now(dt.timezone.utc)
+        ca = self.created_at
+        if ca.tzinfo is None:
+            ca = ca.replace(tzinfo=dt.timezone.utc)
+        return max(0.0, (now - ca).total_seconds() / 3600.0)
 
     @property
     def has_clear_resolution(self):
@@ -452,3 +463,152 @@ def test_pass_normal_spread():
     m = FakeMarket(spread=0.04)
     reason = _hard_reject(m)
     assert reason is None
+
+
+# ═════════════════════════════════════════════════════════════════════
+#  Market Age Tests — hard rejection
+# ═════════════════════════════════════════════════════════════════════
+
+
+def test_hard_reject_too_old():
+    """Markets older than max_market_age_hours are rejected."""
+    m = FakeMarket(
+        created_at=dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=24),
+    )
+    reason = _hard_reject(m, max_market_age_hours=12.0)
+    assert reason is not None
+    assert "too_old" in reason
+
+
+def test_pass_young_market():
+    """Markets younger than max_market_age_hours are accepted."""
+    m = FakeMarket(
+        created_at=dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=3),
+    )
+    reason = _hard_reject(m, max_market_age_hours=12.0)
+    assert reason is None
+
+
+def test_pass_exactly_at_limit():
+    """Market at exactly the age limit still passes (not strictly > check)."""
+    m = FakeMarket(
+        created_at=dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=12),
+    )
+    # age_hours ≈ 12.0 but could be slightly more due to test execution time
+    # With a tiny margin, this should pass or be very close
+    reason = _hard_reject(m, max_market_age_hours=12.1)
+    assert reason is None
+
+
+def test_no_age_limit_passes_old_market():
+    """When max_market_age_hours is None, old markets are not rejected."""
+    m = FakeMarket(
+        created_at=dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=30),
+    )
+    reason = _hard_reject(m, max_market_age_hours=None)
+    assert reason is None
+
+
+def test_no_created_at_passes():
+    """Markets without a created_at date are not rejected by age filter."""
+    m = FakeMarket(created_at=None)
+    reason = _hard_reject(m, max_market_age_hours=12.0)
+    assert reason is None
+
+
+# ═════════════════════════════════════════════════════════════════════
+#  Market Age Tests — scoring freshness bonus
+# ═════════════════════════════════════════════════════════════════════
+
+
+def test_freshness_bonus_brand_new():
+    m = FakeMarket(
+        created_at=dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=30),
+    )
+    score, bd = _score_market(m)
+    assert bd.get("freshness", 0) == 20
+
+
+def test_freshness_bonus_3h():
+    m = FakeMarket(
+        created_at=dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=2),
+    )
+    score, bd = _score_market(m)
+    assert bd.get("freshness", 0) == 15
+
+
+def test_freshness_bonus_6h():
+    m = FakeMarket(
+        created_at=dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=5),
+    )
+    score, bd = _score_market(m)
+    assert bd.get("freshness", 0) == 10
+
+
+def test_freshness_bonus_12h():
+    m = FakeMarket(
+        created_at=dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=10),
+    )
+    score, bd = _score_market(m)
+    assert bd.get("freshness", 0) == 5
+
+
+def test_freshness_bonus_old():
+    m = FakeMarket(
+        created_at=dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=24),
+    )
+    score, bd = _score_market(m)
+    assert bd.get("freshness", 0) == 0
+
+
+def test_freshness_bonus_no_created_at():
+    m = FakeMarket(created_at=None)
+    score, bd = _score_market(m)
+    assert "freshness" not in bd
+
+
+# ═════════════════════════════════════════════════════════════════════
+#  filter_markets() age filtering + youngest-first sorting
+# ═════════════════════════════════════════════════════════════════════
+
+
+def test_filter_markets_rejects_old_markets():
+    now = dt.datetime.now(dt.timezone.utc)
+    young = FakeMarket(id="young", created_at=now - dt.timedelta(hours=2))
+    old = FakeMarket(id="old", created_at=now - dt.timedelta(hours=24))
+    passed, stats = filter_markets(
+        [young, old], min_score=0, max_pass=10, max_market_age_hours=12.0,
+    )
+    ids = [getattr(m, "id") for m in passed]
+    assert "young" in ids
+    assert "old" not in ids
+    assert stats.hard_rejected >= 1
+
+
+def test_filter_markets_youngest_first_tiebreaker():
+    """When two markets have the same score, the younger one comes first."""
+    now = dt.datetime.now(dt.timezone.utc)
+    # Both have identical attributes except age
+    older = FakeMarket(
+        id="older", created_at=now - dt.timedelta(hours=10),
+        volume=50_000, liquidity=20_000,
+    )
+    newer = FakeMarket(
+        id="newer", created_at=now - dt.timedelta(hours=1),
+        volume=50_000, liquidity=20_000,
+    )
+    passed, stats = filter_markets(
+        [older, newer], min_score=0, max_pass=10, max_market_age_hours=12.0,
+    )
+    ids = [getattr(m, "id") for m in passed]
+    assert len(ids) == 2
+    # Newer market should come first (higher freshness bonus + age tiebreaker)
+    assert ids[0] == "newer"
+
+
+def test_filter_markets_no_age_limit():
+    """When max_market_age_hours is not passed, old markets are kept."""
+    now = dt.datetime.now(dt.timezone.utc)
+    old = FakeMarket(id="old", created_at=now - dt.timedelta(days=30))
+    passed, stats = filter_markets([old], min_score=0, max_pass=10)
+    assert len(passed) == 1

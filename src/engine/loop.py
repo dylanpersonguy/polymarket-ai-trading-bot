@@ -323,6 +323,7 @@ class TradingEngine:
             preferred_types = self.config.scanning.preferred_types or None
             min_score = self.config.scanning.filter_min_score
             max_per_cycle = self.config.engine.max_markets_per_cycle
+            max_age_hours = self.config.scanning.max_market_age_hours
 
             self._research_cache.clear_stale()
 
@@ -333,6 +334,7 @@ class TradingEngine:
                 research_cache=self._research_cache,
                 blocked_types=blocked_types,
                 preferred_types=preferred_types,
+                max_market_age_hours=max_age_hours,
             )
             self._last_filter_stats = fstats
             cycle.markets_researched = len(filtered)

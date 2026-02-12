@@ -204,3 +204,70 @@ class TestClassifyMarketType:
 
     def test_unknown_market(self) -> None:
         assert classify_market_type("Something completely unrelated") == "UNKNOWN"
+
+
+class TestCreatedAtParsing:
+    """Test created_at / age_hours parsing from Gamma API raw data."""
+
+    def test_parse_startDate(self) -> None:
+        raw = {
+            "id": "100",
+            "question": "Test",
+            "startDate": "2026-02-12T01:00:00Z",
+        }
+        market = parse_market(raw)
+        assert market.created_at is not None
+        assert market.created_at.year == 2026
+
+    def test_parse_acceptingOrdersTimestamp(self) -> None:
+        raw = {
+            "id": "101",
+            "question": "Test",
+            "acceptingOrdersTimestamp": "2026-02-11T12:00:00Z",
+        }
+        market = parse_market(raw)
+        assert market.created_at is not None
+
+    def test_parse_createdAt(self) -> None:
+        raw = {
+            "id": "102",
+            "question": "Test",
+            "createdAt": "2026-02-10T08:00:00.123456Z",
+        }
+        market = parse_market(raw)
+        assert market.created_at is not None
+
+    def test_startDate_preferred_over_createdAt(self) -> None:
+        """startDate should be preferred because it reflects trading start."""
+        raw = {
+            "id": "103",
+            "question": "Test",
+            "startDate": "2026-02-12T06:00:00Z",
+            "createdAt": "2026-02-11T01:00:00Z",
+        }
+        market = parse_market(raw)
+        assert market.created_at is not None
+        assert market.created_at.day == 12  # startDate, not createdAt
+
+    def test_no_created_at(self) -> None:
+        raw = {"id": "104", "question": "Test"}
+        market = parse_market(raw)
+        assert market.created_at is None
+
+    def test_age_hours(self) -> None:
+        import datetime as dt
+        raw = {
+            "id": "105",
+            "question": "Test",
+            "startDate": (
+                dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=5)
+            ).isoformat().replace("+00:00", "Z"),
+        }
+        market = parse_market(raw)
+        assert market.age_hours is not None
+        assert 4.9 < market.age_hours < 5.5
+
+    def test_age_hours_none_when_no_date(self) -> None:
+        raw = {"id": "106", "question": "Test"}
+        market = parse_market(raw)
+        assert market.age_hours is None
