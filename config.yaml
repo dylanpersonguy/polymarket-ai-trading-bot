@@ -121,12 +121,13 @@ alerts:
 
 wallet_scanner:
   enabled: true
-  scan_interval_minutes: 30
-  min_whale_count: 2
-  min_conviction_score: 30.0
+  scan_interval_minutes: 15        # Was 30 — scan more frequently for signals
+  min_whale_count: 1               # Was 2 — single whale with big $ counts
+  min_conviction_score: 15.0       # Was 30 — catch more signals
   max_wallets: 20
-  conviction_edge_boost: 0.03
+  conviction_edge_boost: 0.08      # Was 0.03 — stronger boost when whales agree
   conviction_edge_penalty: 0.02
+  whale_convergence_min_edge: 0.02 # Lower min_edge when whale+model agree
 
 engine:
   scan_interval_minutes: 15

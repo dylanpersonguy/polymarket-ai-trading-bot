@@ -69,6 +69,7 @@ def check_risk_limits(
     drawdown_state: Any | None = None,
     portfolio_gate: tuple[bool, str] = (True, "ok"),
     confidence_level: str = "LOW",
+    min_edge_override: float | None = None,
 ) -> RiskCheckResult:
     """Run all risk checks. Returns TRADE only if ALL pass."""
     violations: list[str] = []
@@ -105,12 +106,13 @@ def check_risk_limits(
     # 3. Minimum edge — use net_edge (after fees) if available
     net_edge = getattr(edge, "net_edge", edge.abs_edge)
     abs_net = abs(net_edge)
-    if abs_net < risk_config.min_edge:
+    effective_min_edge = min_edge_override if min_edge_override is not None else risk_config.min_edge
+    if abs_net < effective_min_edge:
         violations.append(
-            f"MIN_EDGE: net |edge| {abs_net:.4f} < threshold {risk_config.min_edge}"
+            f"MIN_EDGE: net |edge| {abs_net:.4f} < threshold {effective_min_edge}"
         )
     else:
-        passed.append(f"min_edge: {abs_net:.4f} >= {risk_config.min_edge}")
+        passed.append(f"min_edge: {abs_net:.4f} >= {effective_min_edge}")
 
     # 4. Maximum daily loss
     if daily_pnl < 0 and abs(daily_pnl) >= risk_config.max_daily_loss:

@@ -214,7 +214,7 @@ class WalletScanner:
             name = wallet_info.get("name", addr[:10])
             try:
                 positions = await self._client.get_positions(
-                    addr, sort_by="CURRENT", limit=100,
+                    addr, sort_by="CURRENT", limit=200,
                 )
                 all_positions[addr] = positions
 
@@ -379,7 +379,7 @@ class WalletScanner:
             name = wallet_info.get("name", addr[:10])
             positions = all_positions.get(addr, [])
             for pos in positions:
-                if pos.current_value < 10:
+                if pos.current_value < 1:
                     continue  # skip dust positions
                 key = f"{pos.market_slug}|{pos.outcome}"
                 if key not in market_groups:
@@ -400,11 +400,19 @@ class WalletScanner:
             cur_price = entries[0][2].cur_price
             names = [e[1] for e in entries]
 
-            # Conviction score: whale_count * 20 + log(total_usd) * 5
+            # Conviction score — more generous formula:
+            #   whale_count * 25  (was 20 — rewards even 1 whale)
+            # + log10(total_usd) * 8  (was 5 — rewards big $ more)
+            # + profitability bonus: if avg entry price < current price → whales winning
             import math
-            usd_factor = math.log10(max(total_usd, 1)) * 5
-            count_factor = whale_count * 20
-            conviction = min(count_factor + usd_factor, 100)
+            usd_factor = math.log10(max(total_usd, 1)) * 8
+            count_factor = whale_count * 25
+            # Bonus: whales in profit → higher conviction
+            profit_factor = 0.0
+            if avg_price > 0 and cur_price > 0:
+                whale_return = (cur_price - avg_price) / avg_price
+                profit_factor = max(0, min(whale_return * 20, 15))  # up to 15 pts
+            conviction = min(count_factor + usd_factor + profit_factor, 100)
 
             if conviction < self._min_conviction_score:
                 continue

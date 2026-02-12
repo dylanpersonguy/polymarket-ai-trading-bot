@@ -144,7 +144,7 @@ class TimelineConfig(BaseModel):
 
 class MicrostructureConfig(BaseModel):
     """Market microstructure analysis configuration."""
-    whale_size_threshold_usd: float = 5000.0
+    whale_size_threshold_usd: float = 2000.0
     flow_imbalance_windows: list[int] = Field(default_factory=lambda: [60, 240, 1440])
     depth_change_alert_pct: float = 0.30
     trade_acceleration_window_mins: int = 30
@@ -226,12 +226,13 @@ class AlertsConfig(BaseModel):
 class WalletScannerConfig(BaseModel):
     """Whale / smart-money wallet scanner configuration."""
     enabled: bool = True
-    scan_interval_minutes: int = 30
-    min_whale_count: int = 2       # min whales for conviction signal
-    min_conviction_score: float = 30.0
+    scan_interval_minutes: int = 15
+    min_whale_count: int = 1       # single whale with big $ = valid signal
+    min_conviction_score: float = 15.0
     max_wallets: int = 20          # max wallets to track
-    conviction_edge_boost: float = 0.03  # boost edge by 3% when whales agree
+    conviction_edge_boost: float = 0.08  # boost edge by 8% when whales agree
     conviction_edge_penalty: float = 0.02  # penalise edge when whales disagree
+    whale_convergence_min_edge: float = 0.02  # lower min_edge when whale+model agree
     track_leaderboard: bool = True  # auto-track leaderboard wallets
     custom_wallets: list[str] = Field(default_factory=list)  # user-added wallet addresses
 

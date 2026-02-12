@@ -567,8 +567,8 @@ class TestConvictionSignals:
             min_conviction_score=0,
         )
         positions = {
-            "0xa": [_make_position(slug="dust-mk", current_value=5)],  # < $10
-            "0xb": [_make_position(slug="dust-mk", current_value=3)],  # < $10
+            "0xa": [_make_position(slug="dust-mk", current_value=0.5)],  # < $1
+            "0xb": [_make_position(slug="dust-mk", current_value=0.3)],  # < $1
         }
         signals = scanner._compute_conviction(positions, "2026-01-01")
         assert len(signals) == 0
@@ -965,12 +965,13 @@ class TestWalletScannerConfig:
         from src.config import WalletScannerConfig
         cfg = WalletScannerConfig()
         assert cfg.enabled is True
-        assert cfg.scan_interval_minutes == 30
-        assert cfg.min_whale_count == 2
-        assert cfg.min_conviction_score == 30.0
+        assert cfg.scan_interval_minutes == 15
+        assert cfg.min_whale_count == 1
+        assert cfg.min_conviction_score == 15.0
         assert cfg.max_wallets == 20
-        assert cfg.conviction_edge_boost == 0.03
+        assert cfg.conviction_edge_boost == 0.08
         assert cfg.conviction_edge_penalty == 0.02
+        assert cfg.whale_convergence_min_edge == 0.02
         assert cfg.track_leaderboard is True
         assert cfg.custom_wallets == []
 
@@ -979,7 +980,7 @@ class TestWalletScannerConfig:
         cfg = BotConfig()
         assert hasattr(cfg, "wallet_scanner")
         assert cfg.wallet_scanner.enabled is True
-        assert cfg.wallet_scanner.scan_interval_minutes == 30
+        assert cfg.wallet_scanner.scan_interval_minutes == 15
 
     def test_custom_values(self):
         from src.config import WalletScannerConfig
@@ -1135,3 +1136,146 @@ class TestSnapshotUpdate:
         scanner._update_snapshot({"0xnew": [_make_position()]})
         assert "0xold" not in scanner._prev_positions
         assert "0xnew" in scanner._prev_positions
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  WHALE CONVERGENCE & IMPROVED DETECTION
+# ═══════════════════════════════════════════════════════════════════
+
+class TestImprovedWhaleDetection:
+    """Test improved whale detection: lower thresholds, better scoring,
+    single-whale signals, dust filter at $1, and convergence logic."""
+
+    def test_single_whale_signal_with_min_count_1(self):
+        """A single whale with min_whale_count=1 should produce a signal."""
+        from src.analytics.wallet_scanner import WalletScanner
+        scanner = WalletScanner(
+            wallets=[{"address": "0xa", "name": "Alpha"}],
+            min_whale_count=1,
+            min_conviction_score=0,
+        )
+        positions = {
+            "0xa": [_make_position(slug="solo-whale", current_value=5000)],
+        }
+        signals = scanner._compute_conviction(positions, "2026-01-01")
+        assert len(signals) == 1
+        assert signals[0].whale_count == 1
+
+    def test_low_value_above_1_not_dust(self):
+        """Positions worth $2-$9 should no longer be dust-filtered."""
+        from src.analytics.wallet_scanner import WalletScanner
+        scanner = WalletScanner(
+            wallets=[
+                {"address": "0xa", "name": "A"},
+                {"address": "0xb", "name": "B"},
+            ],
+            min_whale_count=2,
+            min_conviction_score=0,
+        )
+        positions = {
+            "0xa": [_make_position(slug="small-mk", current_value=5)],
+            "0xb": [_make_position(slug="small-mk", current_value=3)],
+        }
+        signals = scanner._compute_conviction(positions, "2026-01-01")
+        assert len(signals) == 1  # Now caught (was 0 with $10 dust filter)
+
+    def test_profit_factor_boosts_score(self):
+        """Whales in profit should get higher conviction score."""
+        from src.analytics.wallet_scanner import WalletScanner
+        scanner = WalletScanner(
+            wallets=[
+                {"address": "0xa", "name": "A"},
+                {"address": "0xb", "name": "B"},
+            ],
+            min_whale_count=2,
+            min_conviction_score=0,
+        )
+        # Whales bought at 0.40, price now 0.60 → in profit
+        profitable = {
+            "0xa": [_make_position(slug="profit-mk", avg_price=0.40, cur_price=0.60, current_value=600)],
+            "0xb": [_make_position(slug="profit-mk", avg_price=0.40, cur_price=0.60, current_value=400)],
+        }
+        # Whales bought at 0.60, price now 0.40 → losing
+        losing = {
+            "0xa": [_make_position(slug="loss-mk", avg_price=0.60, cur_price=0.40, current_value=400)],
+            "0xb": [_make_position(slug="loss-mk", avg_price=0.60, cur_price=0.40, current_value=400)],
+        }
+        prof_signals = scanner._compute_conviction(profitable, "2026-01-01")
+        loss_signals = scanner._compute_conviction(losing, "2026-01-01")
+        assert len(prof_signals) == 1
+        assert len(loss_signals) == 1
+        # Profitable whales should have higher conviction
+        assert prof_signals[0].conviction_score > loss_signals[0].conviction_score
+
+    def test_min_edge_override_in_risk_limits(self):
+        """min_edge_override should lower the MIN_EDGE threshold."""
+        from src.policy.risk_limits import check_risk_limits
+        from src.config import RiskConfig, ForecastingConfig
+        from src.policy.edge_calc import EdgeResult
+        from src.forecast.feature_builder import MarketFeatures
+
+        edge = EdgeResult(
+            implied_probability=0.50,
+            model_probability=0.53,
+            raw_edge=0.03,
+            edge_pct=0.06,
+            direction="BUY_YES",
+            expected_value_per_dollar=0.03,
+            is_positive=True,
+            net_edge=0.03,
+        )
+        features = MarketFeatures()
+        risk_cfg = RiskConfig(min_edge=0.05)  # Normal: 0.03 < 0.05 = FAIL
+
+        # Without override: should fail MIN_EDGE
+        result_normal = check_risk_limits(
+            edge=edge, features=features,
+            risk_config=risk_cfg,
+            forecast_config=ForecastingConfig(),
+        )
+        edge_violations = [v for v in result_normal.violations if "MIN_EDGE" in v]
+        assert len(edge_violations) == 1
+
+        # With override: 0.03 >= 0.02 = PASS
+        result_whale = check_risk_limits(
+            edge=edge, features=features,
+            risk_config=risk_cfg,
+            forecast_config=ForecastingConfig(),
+            min_edge_override=0.02,
+        )
+        edge_violations_whale = [v for v in result_whale.violations if "MIN_EDGE" in v]
+        assert len(edge_violations_whale) == 0
+
+    def test_whale_convergence_min_edge_config(self):
+        """whale_convergence_min_edge should be accessible in config."""
+        from src.config import WalletScannerConfig
+        cfg = WalletScannerConfig()
+        assert cfg.whale_convergence_min_edge == 0.02
+        # Custom
+        cfg2 = WalletScannerConfig(whale_convergence_min_edge=0.01)
+        assert cfg2.whale_convergence_min_edge == 0.01
+
+    def test_conviction_signal_has_condition_id(self):
+        """ConvictionSignal should carry condition_id for engine matching."""
+        from src.analytics.wallet_scanner import WalletScanner
+        scanner = WalletScanner(
+            wallets=[
+                {"address": "0xa", "name": "A"},
+                {"address": "0xb", "name": "B"},
+            ],
+            min_whale_count=2,
+            min_conviction_score=0,
+        )
+        positions = {
+            "0xa": [_make_position(slug="match-mk", condition_id="cond_123", current_value=500)],
+            "0xb": [_make_position(slug="match-mk", condition_id="cond_123", current_value=500)],
+        }
+        signals = scanner._compute_conviction(positions, "2026-01-01")
+        assert len(signals) == 1
+        assert signals[0].condition_id == "cond_123"
+
+    def test_microstructure_whale_threshold_lowered(self):
+        """MicrostructureConfig whale_size_threshold should be 2000."""
+        from src.config import MicrostructureConfig
+        cfg = MicrostructureConfig()
+        assert cfg.whale_size_threshold_usd == 2000.0

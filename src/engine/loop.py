@@ -79,6 +79,7 @@ class PipelineContext:
     has_edge: bool = False
     risk_result: Any = None
     position: Any = None
+    whale_converged: bool = False   # True when whale signal agrees with model edge
     result: dict[str, Any] = field(default_factory=lambda: {
         "has_edge": False, "trade_attempted": False, "trade_executed": False,
     })
@@ -699,7 +700,14 @@ class TradingEngine:
             log.warning("engine.calibration_apply_error", error=str(e))
 
     def _stage_edge_calc(self, ctx: PipelineContext) -> None:
-        """Stage 4: Edge calculation + whale/smart-money adjustment."""
+        """Stage 4: Edge calculation + whale/smart-money adjustment.
+
+        Fixes applied:
+          - Match by market_slug OR condition_id (not market_id)
+          - Match direction BULLISH/BEARISH (not BUY/SELL)
+          - Whale-edge convergence: when whale signal agrees with model edge,
+            use a lower min_edge threshold for higher conviction trades
+        """
         from src.policy.edge_calc import calculate_edge
         ctx.edge_result = calculate_edge(
             implied_prob=ctx.forecast.implied_probability,
@@ -708,32 +716,59 @@ class TradingEngine:
             gas_cost_usd=self.config.risk.gas_cost_usd,
         )
 
+        # Track whale convergence for min_edge override later
+        ctx_whale_converged = False
+
         # Whale / Smart-Money Edge Adjustment
         if (self.config.wallet_scanner.enabled
                 and self._latest_scan_result
                 and hasattr(self._latest_scan_result, "conviction_signals")):
             whale_cfg = self.config.wallet_scanner
+            market_slug = getattr(ctx.market, "slug", "") or ""
+            market_cid = getattr(ctx.market, "condition_id", "") or ""
+
             for sig in self._latest_scan_result.conviction_signals:
-                if getattr(sig, "market_id", None) != ctx.market_id:
+                # Match by slug, condition_id, or title substring
+                sig_slug = getattr(sig, "market_slug", "") or ""
+                sig_cid = getattr(sig, "condition_id", "") or ""
+                matched = (
+                    (sig_slug and market_slug and sig_slug == market_slug)
+                    or (sig_cid and market_cid and sig_cid == market_cid)
+                )
+                if not matched:
                     continue
+
+                # Direction matching: BULLISH→BUY_YES, BEARISH→BUY_NO
                 whale_agrees = (
-                    (sig.direction == "BUY" and ctx.edge_result.direction == "BUY_YES")
-                    or (sig.direction == "SELL" and ctx.edge_result.direction == "BUY_NO")
+                    (sig.direction == "BULLISH" and ctx.edge_result.direction == "BUY_YES")
+                    or (sig.direction == "BEARISH" and ctx.edge_result.direction == "BUY_NO")
                 )
                 if whale_agrees:
                     boost = whale_cfg.conviction_edge_boost
+                    # Scale boost by conviction strength
+                    strength_mult = (
+                        1.5 if sig.signal_strength == "STRONG"
+                        else 1.0 if sig.signal_strength == "MODERATE"
+                        else 0.6
+                    )
+                    scaled_boost = boost * strength_mult
                     ctx.edge_result = calculate_edge(
                         implied_prob=ctx.forecast.implied_probability,
                         model_prob=(
-                            min(0.99, ctx.forecast.model_probability + boost)
+                            min(0.99, ctx.forecast.model_probability + scaled_boost)
                             if ctx.edge_result.direction == "BUY_YES"
-                            else ctx.forecast.model_probability
+                            else max(0.01, ctx.forecast.model_probability - scaled_boost)
                         ),
                         transaction_fee_pct=self.config.risk.transaction_fee_pct,
                         gas_cost_usd=self.config.risk.gas_cost_usd,
                     )
+                    ctx_whale_converged = True
+                    ctx.whale_converged = True
                     log.info("engine.whale_edge_boost", market_id=ctx.market_id,
-                             boost=boost, new_edge=round(ctx.edge_result.abs_net_edge, 4))
+                             boost=round(scaled_boost, 4),
+                             strength=sig.signal_strength,
+                             whale_count=sig.whale_count,
+                             new_edge=round(ctx.edge_result.abs_net_edge, 4))
                 else:
                     penalty = whale_cfg.conviction_edge_penalty
                     ctx.edge_result = calculate_edge(
@@ -750,9 +785,19 @@ class TradingEngine:
                              penalty=penalty, new_edge=round(ctx.edge_result.abs_net_edge, 4))
                 break  # only apply first matching signal
 
+        # Determine if we have edge — use lower threshold when whales agree
+        min_edge = self.config.risk.min_edge
+        if ctx_whale_converged:
+            min_edge = self.config.wallet_scanner.whale_convergence_min_edge
+            log.info("engine.whale_convergence",
+                     market_id=ctx.market_id,
+                     normal_min_edge=self.config.risk.min_edge,
+                     whale_min_edge=min_edge,
+                     edge=round(ctx.edge_result.abs_net_edge, 4))
+
         ctx.has_edge = (
             ctx.edge_result.is_positive
-            and ctx.edge_result.abs_net_edge >= self.config.risk.min_edge
+            and ctx.edge_result.abs_net_edge >= min_edge
         )
 
     def _stage_risk_checks(self, ctx: PipelineContext) -> None:
@@ -760,6 +805,12 @@ class TradingEngine:
         from src.policy.risk_limits import check_risk_limits
         daily_pnl = self._db.get_daily_pnl() if self._db else 0.0
         open_positions = self._db.get_open_positions_count() if self._db else 0
+
+        # When whales agree with our model, use a lower min_edge threshold
+        whale_min_edge = None
+        if ctx.whale_converged:
+            whale_min_edge = self.config.wallet_scanner.whale_convergence_min_edge
+
         ctx.risk_result = check_risk_limits(
             edge=ctx.edge_result, features=ctx.features,
             risk_config=self.config.risk,
@@ -771,6 +822,7 @@ class TradingEngine:
             restricted_types=self.config.scanning.restricted_types or None,
             drawdown_state=self.drawdown.state,
             confidence_level=ctx.forecast.confidence_level if ctx.forecast else "LOW",
+            min_edge_override=whale_min_edge,
         )
 
     def _stage_persist_forecast(self, ctx: PipelineContext) -> None:
