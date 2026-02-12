@@ -489,7 +489,15 @@ def run_migrations(conn: sqlite3.Connection) -> None:
             continue
         log.info("migrations.running", version=version)
         for sql in _MIGRATIONS[version]:
-            conn.execute(sql)
+            try:
+                conn.execute(sql)
+            except sqlite3.OperationalError as e:
+                # Handle idempotent ALTER TABLE ADD COLUMN when column already exists
+                # (e.g. dashboard _ensure_tables created it first)
+                if "duplicate column name" in str(e):
+                    log.info("migrations.column_exists_skip", version=version, error=str(e))
+                else:
+                    raise
         conn.execute(
             "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
             (version,),
