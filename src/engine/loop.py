@@ -1025,6 +1025,8 @@ class TradingEngine:
                         size=order_result.fill_size,
                         stake_usd=position.stake_usd,
                         current_price=order_result.fill_price, pnl=0.0,
+                        question=ctx.question[:200] if ctx.question else "",
+                        market_type=getattr(ctx.market, "market_type", ""),
                     ))
                 ctx.result["trade_executed"] = True
                 # Subscribe token to WebSocket feed for live pricing
@@ -1129,6 +1131,82 @@ class TradingEngine:
         except Exception as e:
             log.warning("engine.log_candidate_error", error=str(e))
 
+    def _record_performance_log(
+        self,
+        pos: Any,
+        exit_price: float,
+        pnl: float,
+        mkt_record: Any = None,
+    ) -> None:
+        """Write a closed position to the performance_log table for analytics.
+
+        Gathers forecast data (probability, edge, confidence, evidence quality)
+        from the forecasts table and computes holding duration.
+        """
+        if not self._db:
+            return
+        try:
+            import datetime as _dt
+            from src.storage.models import PerformanceLogRecord
+
+            # Look up the most recent forecast for this market
+            forecasts = self._db.get_forecasts(market_id=pos.market_id, limit=1)
+            fc = forecasts[0] if forecasts else None
+
+            # Compute holding hours
+            holding_hours = 0.0
+            try:
+                opened = _dt.datetime.fromisoformat(
+                    pos.opened_at.replace("Z", "+00:00")
+                )
+                now = _dt.datetime.now(_dt.timezone.utc)
+                holding_hours = (now - opened).total_seconds() / 3600
+            except Exception:
+                pass
+
+            # Determine category from market record or forecast
+            category = "UNKNOWN"
+            if mkt_record and getattr(mkt_record, "category", None):
+                category = mkt_record.category
+            elif fc and getattr(fc, "market_type", None):
+                category = fc.market_type
+
+            # Determine actual outcome from exit price (for resolved markets)
+            actual_outcome = None
+            if exit_price >= 0.98:
+                actual_outcome = 1.0
+            elif exit_price <= 0.02:
+                actual_outcome = 0.0
+
+            self._db.insert_performance_log(PerformanceLogRecord(
+                market_id=pos.market_id,
+                question=(
+                    getattr(mkt_record, "question", "")
+                    if mkt_record else getattr(pos, "question", "")
+                ),
+                category=category,
+                forecast_prob=fc.model_probability if fc else 0.0,
+                actual_outcome=actual_outcome,
+                edge_at_entry=fc.edge if fc else 0.0,
+                confidence=fc.confidence_level if fc else "LOW",
+                evidence_quality=fc.evidence_quality if fc else 0.0,
+                stake_usd=pos.stake_usd,
+                entry_price=pos.entry_price,
+                exit_price=exit_price,
+                pnl=pnl,
+                holding_hours=round(holding_hours, 2),
+            ))
+
+            log.info(
+                "engine.performance_log_recorded",
+                market_id=pos.market_id[:8],
+                pnl=pnl,
+                holding_hours=round(holding_hours, 1),
+                category=category,
+            )
+        except Exception as e:
+            log.warning("engine.performance_log_error", error=str(e))
+
     async def _check_positions(self) -> None:
         """Fetch live prices for all open positions and update PNL.
 
@@ -1187,15 +1265,34 @@ class TradingEngine:
                         market = await client.get_market(pos.market_id)
                     mkt_record = self._db.get_market(pos.market_id)
 
-                    # ── Stop-loss / take-profit exit check ───────────
+                    # ── Determine exit reason (if any) ───────────────
                     sl_pct = getattr(self.config.risk, "stop_loss_pct", 0.0)
                     tp_pct = getattr(self.config.risk, "take_profit_pct", 0.0)
+                    max_hold = getattr(self.config.risk, "max_holding_hours", 72.0)
                     pnl_pct = pnl / pos.stake_usd if pos.stake_usd > 0 else 0.0
                     exit_reason = ""
+
+                    # Stop-loss
                     if sl_pct > 0 and pnl_pct <= -sl_pct:
                         exit_reason = f"STOP_LOSS: {pnl_pct:.1%} <= -{sl_pct:.0%}"
+                    # Take-profit
                     elif tp_pct > 0 and pnl_pct >= tp_pct:
                         exit_reason = f"TAKE_PROFIT: {pnl_pct:.1%} >= +{tp_pct:.0%}"
+                    # Market resolved (price at 0 or 1)
+                    elif current_price is not None and (current_price >= 0.98 or current_price <= 0.02):
+                        exit_reason = f"MARKET_RESOLVED: price={current_price:.4f}"
+                    # Max holding period exceeded
+                    elif max_hold > 0:
+                        try:
+                            import datetime as _dt
+                            opened = _dt.datetime.fromisoformat(pos.opened_at.replace("Z", "+00:00"))
+                            now = _dt.datetime.now(_dt.timezone.utc)
+                            holding_hours = (now - opened).total_seconds() / 3600
+                            if holding_hours >= max_hold:
+                                exit_reason = f"MAX_HOLDING: {holding_hours:.1f}h >= {max_hold:.0f}h"
+                        except Exception:
+                            pass
+
                     if exit_reason:
                         log.info(
                             "engine.auto_exit",
@@ -1204,7 +1301,8 @@ class TradingEngine:
                             pnl=round(pnl, 4),
                             pnl_pct=f"{pnl_pct:.1%}",
                         )
-                        # Record the close in trades table and remove position
+
+                        # ── Record the exit trade ────────────────────
                         from src.storage.models import TradeRecord
                         self._db.insert_trade(TradeRecord(
                             id=f"exit-{pos.market_id[:8]}-{int(time.time())}",
@@ -1218,14 +1316,30 @@ class TradingEngine:
                             status=f"SIMULATED|{exit_reason}",
                             dry_run=True,
                         ))
+
+                        # ── Archive position before deletion ─────────
+                        self._db.archive_position(
+                            pos=pos,
+                            exit_price=current_price,
+                            pnl=round(pnl, 4),
+                            close_reason=exit_reason.split(":")[0],
+                        )
+
+                        # ── Write to performance_log for analytics ───
+                        self._record_performance_log(
+                            pos=pos,
+                            exit_price=current_price,
+                            pnl=round(pnl, 4),
+                            mkt_record=mkt_record,
+                        )
+
                         self._db.remove_position(pos.market_id)
-                        if self._db:
-                            self._db.insert_alert(
-                                "warning",
-                                f"Auto-exit {pos.market_id[:8]}: {exit_reason} "
-                                f"(PNL ${pnl:.2f})",
-                                "engine",
-                            )
+                        self._db.insert_alert(
+                            "warning",
+                            f"Auto-exit {pos.market_id[:8]}: {exit_reason} "
+                            f"(PNL ${pnl:.2f})",
+                            "engine",
+                        )
                         continue  # skip snapshot — position closed
 
                     # Build snapshot for portfolio risk

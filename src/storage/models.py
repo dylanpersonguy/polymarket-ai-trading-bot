@@ -79,3 +79,45 @@ class PositionRecord(BaseModel):
     opened_at: str = Field(
         default_factory=lambda: dt.datetime.now(dt.timezone.utc).isoformat()
     )
+    question: str = ""
+    market_type: str = ""
+
+
+class ClosedPositionRecord(BaseModel):
+    """Archived closed position with full context."""
+    id: str = ""
+    market_id: str
+    token_id: str = ""
+    direction: str = ""
+    entry_price: float = 0.0
+    exit_price: float = 0.0
+    size: float = 0.0
+    stake_usd: float = 0.0
+    pnl: float = 0.0
+    close_reason: str = ""
+    question: str = ""
+    market_type: str = ""
+    opened_at: str = ""
+    closed_at: str = Field(
+        default_factory=lambda: dt.datetime.now(dt.timezone.utc).isoformat()
+    )
+
+
+class PerformanceLogRecord(BaseModel):
+    """Record for the performance_log table — one per resolved/closed trade."""
+    market_id: str
+    question: str = ""
+    category: str = "UNKNOWN"
+    forecast_prob: float = 0.0
+    actual_outcome: float | None = None
+    edge_at_entry: float = 0.0
+    confidence: str = "LOW"
+    evidence_quality: float = 0.0
+    stake_usd: float = 0.0
+    entry_price: float = 0.0
+    exit_price: float = 0.0
+    pnl: float = 0.0
+    holding_hours: float = 0.0
+    resolved_at: str = Field(
+        default_factory=lambda: dt.datetime.now(dt.timezone.utc).isoformat()
+    )

@@ -94,6 +94,7 @@ class RiskConfig(BaseModel):
     min_implied_probability: float = 0.10  # Block micro-probability markets
     stop_loss_pct: float = 0.20  # Exit when position loses 20%
     take_profit_pct: float = 0.30  # Exit when position gains 30%
+    max_holding_hours: float = 72.0  # Auto-exit positions held longer than this
     category_stake_multipliers: dict[str, float] = Field(
         default_factory=lambda: {
             "MACRO": 1.0,

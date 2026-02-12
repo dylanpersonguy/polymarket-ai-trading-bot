@@ -13,7 +13,14 @@ from typing import Any
 
 from src.config import StorageConfig
 from src.storage.migrations import run_migrations
-from src.storage.models import ForecastRecord, MarketRecord, PositionRecord, TradeRecord
+from src.storage.models import (
+    ClosedPositionRecord,
+    ForecastRecord,
+    MarketRecord,
+    PerformanceLogRecord,
+    PositionRecord,
+    TradeRecord,
+)
 from src.observability.logger import get_logger
 
 log = get_logger(__name__)
@@ -141,11 +148,21 @@ class Database:
         return tid
 
     def get_daily_pnl(self) -> float:
-        """Get total PnL for today (placeholder — real impl would track fills)."""
-        row = self.conn.execute(
-            "SELECT COALESCE(SUM(stake_usd), 0) FROM trades WHERE date(created_at) = date('now')"
+        """Get total PnL for today: realized (closed positions) + unrealized (open positions)."""
+        # Realized P&L from positions closed today
+        realized = self.conn.execute(
+            "SELECT COALESCE(SUM(pnl), 0) FROM performance_log "
+            "WHERE date(resolved_at) = date('now')"
         ).fetchone()
-        return float(row[0]) if row else 0.0
+        realized_pnl = float(realized[0]) if realized else 0.0
+
+        # Unrealized P&L from open positions
+        unrealized = self.conn.execute(
+            "SELECT COALESCE(SUM(pnl), 0) FROM positions"
+        ).fetchone()
+        unrealized_pnl = float(unrealized[0]) if unrealized else 0.0
+
+        return realized_pnl + unrealized_pnl
 
     # ── Positions ────────────────────────────────────────────────────
 
@@ -163,13 +180,15 @@ class Database:
             """
             INSERT OR REPLACE INTO positions
                 (market_id, token_id, direction, entry_price,
-                 size, stake_usd, current_price, pnl, opened_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 size, stake_usd, current_price, pnl, opened_at,
+                 question, market_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 pos.market_id, pos.token_id, pos.direction,
                 pos.entry_price, pos.size, pos.stake_usd,
                 pos.current_price, pos.pnl, pos.opened_at,
+                pos.question, pos.market_type,
             ),
         )
         self.conn.commit()
@@ -185,6 +204,79 @@ class Database:
     def remove_position(self, market_id: str) -> None:
         self.conn.execute("DELETE FROM positions WHERE market_id = ?", (market_id,))
         self.conn.commit()
+
+    def archive_position(
+        self,
+        pos: PositionRecord,
+        exit_price: float,
+        pnl: float,
+        close_reason: str,
+    ) -> None:
+        """Save a closing position to the closed_positions archive before deletion."""
+        import datetime as _dt
+        try:
+            self.conn.execute(
+                """INSERT INTO closed_positions
+                    (market_id, token_id, direction, entry_price, exit_price,
+                     size, stake_usd, pnl, close_reason, question, market_type,
+                     opened_at, closed_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    pos.market_id, pos.token_id, pos.direction,
+                    pos.entry_price, exit_price, pos.size, pos.stake_usd,
+                    pnl, close_reason,
+                    getattr(pos, "question", ""),
+                    getattr(pos, "market_type", ""),
+                    pos.opened_at,
+                    _dt.datetime.now(_dt.timezone.utc).isoformat(),
+                ),
+            )
+            self.conn.commit()
+        except Exception as e:
+            log.warning("database.archive_position_error", error=str(e))
+
+    def insert_performance_log(self, record: PerformanceLogRecord) -> None:
+        """Insert a resolved trade into the performance_log table."""
+        try:
+            self.conn.execute(
+                """INSERT INTO performance_log
+                    (market_id, question, category, forecast_prob, actual_outcome,
+                     edge_at_entry, confidence, evidence_quality, stake_usd,
+                     entry_price, exit_price, pnl, holding_hours, resolved_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    record.market_id, record.question, record.category,
+                    record.forecast_prob, record.actual_outcome,
+                    record.edge_at_entry, record.confidence,
+                    record.evidence_quality, record.stake_usd,
+                    record.entry_price, record.exit_price, record.pnl,
+                    record.holding_hours, record.resolved_at,
+                ),
+            )
+            self.conn.commit()
+        except Exception as e:
+            log.warning("database.insert_performance_log_error", error=str(e))
+
+    def get_closed_positions(self, limit: int = 100) -> list[dict]:
+        """Return closed positions, most recent first."""
+        rows = self.conn.execute(
+            "SELECT * FROM closed_positions ORDER BY closed_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_position(self, market_id: str) -> PositionRecord | None:
+        """Return a single position by market_id, or None."""
+        row = self.conn.execute(
+            "SELECT * FROM positions WHERE market_id = ?", (market_id,)
+        ).fetchone()
+        if row:
+            d = dict(row)
+            # Handle older schema without question/market_type columns
+            d.setdefault("question", "")
+            d.setdefault("market_type", "")
+            return PositionRecord(**d)
+        return None
 
     # ── Engine State ─────────────────────────────────────────────────
 

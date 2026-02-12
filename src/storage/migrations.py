@@ -8,7 +8,7 @@ from src.observability.logger import get_logger
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 _MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -472,6 +472,46 @@ _MIGRATIONS: dict[int, list[str]] = {
         """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_deltas_unique
             ON wallet_deltas(wallet_address, market_slug, outcome, action);
+        """,
+    ],
+
+    # ── Migration 8: Paper trading improvements ──────────────────
+    8: [
+        # Add question/market_type to positions for better context
+        """
+        ALTER TABLE positions ADD COLUMN question TEXT DEFAULT '';
+        """,
+        """
+        ALTER TABLE positions ADD COLUMN market_type TEXT DEFAULT '';
+        """,
+
+        # Closed positions archive — permanent record of every closed position
+        """
+        CREATE TABLE IF NOT EXISTS closed_positions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            market_id TEXT NOT NULL,
+            token_id TEXT,
+            direction TEXT,
+            entry_price REAL DEFAULT 0,
+            exit_price REAL DEFAULT 0,
+            size REAL DEFAULT 0,
+            stake_usd REAL DEFAULT 0,
+            pnl REAL DEFAULT 0,
+            close_reason TEXT DEFAULT '',
+            question TEXT DEFAULT '',
+            market_type TEXT DEFAULT '',
+            opened_at TEXT,
+            closed_at TEXT
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_closed_pos_market ON closed_positions(market_id);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_closed_pos_closed ON closed_positions(closed_at);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_closed_pos_reason ON closed_positions(close_reason);
         """,
     ],
 }

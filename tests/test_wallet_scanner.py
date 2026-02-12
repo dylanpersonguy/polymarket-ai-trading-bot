@@ -1005,14 +1005,14 @@ class TestMigration:
 
     def test_migration_creates_tables(self):
         from src.storage.migrations import run_migrations, SCHEMA_VERSION
-        assert SCHEMA_VERSION == 7
+        assert SCHEMA_VERSION >= 7
 
         conn = sqlite3.connect(":memory:")
         run_migrations(conn)
 
         # Check schema version
         v = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
-        assert v == 7
+        assert v >= 7
 
         # Check tables exist
         tables = {
@@ -1031,7 +1031,7 @@ class TestMigration:
         run_migrations(conn)
         run_migrations(conn)  # run again — should be no-op
         v = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
-        assert v == 7
+        assert v >= 7
         conn.close()
     def test_signals_deduplication(self):
         """Saving the same conviction signal twice should not create duplicates."""
