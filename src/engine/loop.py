@@ -453,6 +453,16 @@ class TradingEngine:
         ctx = PipelineContext(market=market, cycle_id=cycle_id,
                               market_id=market.id, question=market.question)
 
+        # ── Early exit: skip if we already hold a position ───────────
+        if self._db:
+            existing = [p for p in (self._db.get_open_positions())
+                        if p.market_id == market.id]
+            if existing:
+                log.info("engine.duplicate_skip", market_id=market.id[:8],
+                         msg="Already have open position — skipping")
+                ctx.result["skipped"] = "duplicate_position"
+                return ctx.result
+
         # ── Stage 0: Classification ──────────────────────────────────
         self._stage_classify(ctx)
 
@@ -760,6 +770,7 @@ class TradingEngine:
             allowed_types=self.config.scanning.preferred_types or None,
             restricted_types=self.config.scanning.restricted_types or None,
             drawdown_state=self.drawdown.state,
+            confidence_level=ctx.forecast.confidence_level if ctx.forecast else "LOW",
         )
 
     def _stage_persist_forecast(self, ctx: PipelineContext) -> None:
@@ -823,6 +834,11 @@ class TradingEngine:
             self._current_regime.size_multiplier
             if self._current_regime else 1.0
         )
+        # Category-weighted stake multiplier
+        category = (ctx.classification.category
+                    if ctx.classification else ctx.market.category or "")
+        cat_mults = getattr(self.config.risk, "category_stake_multipliers", {})
+        cat_mult = cat_mults.get(category, 1.0)
         ctx.position = calculate_position_size(
             edge=ctx.edge_result, risk_config=self.config.risk,
             confidence_level=ctx.forecast.confidence_level,
@@ -830,6 +846,7 @@ class TradingEngine:
             timeline_multiplier=ctx.features.time_decay_multiplier,
             price_volatility=ctx.features.price_volatility,
             regime_multiplier=regime_kelly * regime_size,
+            category_multiplier=cat_mult,
         )
         if ctx.position.stake_usd < 1.0:
             log.info("engine.stake_too_small", market_id=ctx.market_id,
@@ -1111,10 +1128,53 @@ class TradingEngine:
                         pos.market_id, current_price, round(pnl, 4),
                     )
 
-                    # Build snapshot for portfolio risk
+                    # Fetch market metadata (needed for snapshots + exit trades)
                     if market is None:
                         market = await client.get_market(pos.market_id)
                     mkt_record = self._db.get_market(pos.market_id)
+
+                    # ── Stop-loss / take-profit exit check ───────────
+                    sl_pct = getattr(self.config.risk, "stop_loss_pct", 0.0)
+                    tp_pct = getattr(self.config.risk, "take_profit_pct", 0.0)
+                    pnl_pct = pnl / pos.stake_usd if pos.stake_usd > 0 else 0.0
+                    exit_reason = ""
+                    if sl_pct > 0 and pnl_pct <= -sl_pct:
+                        exit_reason = f"STOP_LOSS: {pnl_pct:.1%} <= -{sl_pct:.0%}"
+                    elif tp_pct > 0 and pnl_pct >= tp_pct:
+                        exit_reason = f"TAKE_PROFIT: {pnl_pct:.1%} >= +{tp_pct:.0%}"
+                    if exit_reason:
+                        log.info(
+                            "engine.auto_exit",
+                            market_id=pos.market_id[:8],
+                            reason=exit_reason,
+                            pnl=round(pnl, 4),
+                            pnl_pct=f"{pnl_pct:.1%}",
+                        )
+                        # Record the close in trades table and remove position
+                        from src.storage.models import TradeRecord
+                        self._db.insert_trade(TradeRecord(
+                            id=f"exit-{pos.market_id[:8]}-{int(time.time())}",
+                            order_id=f"auto-exit-{pos.market_id[:8]}",
+                            market_id=pos.market_id,
+                            token_id=pos.token_id,
+                            side="SELL",
+                            price=current_price,
+                            size=pos.size,
+                            stake_usd=pos.stake_usd,
+                            status=f"SIMULATED|{exit_reason}",
+                            dry_run=True,
+                        ))
+                        self._db.remove_position(pos.market_id)
+                        if self._db:
+                            self._db.insert_alert(
+                                "warning",
+                                f"Auto-exit {pos.market_id[:8]}: {exit_reason} "
+                                f"(PNL ${pnl:.2f})",
+                                "engine",
+                            )
+                        continue  # skip snapshot — position closed
+
+                    # Build snapshot for portfolio risk
                     snapshots.append(PositionSnapshot(
                         market_id=pos.market_id,
                         question=mkt_record.question if mkt_record else "",

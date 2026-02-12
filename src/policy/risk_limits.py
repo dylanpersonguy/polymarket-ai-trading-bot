@@ -13,9 +13,12 @@ Rules:
   7. Minimum liquidity
   8. Maximum spread
   9. Evidence quality threshold
-  10. Market type allowed
-  11. Portfolio category/event exposure
-  12. Timeline endgame check
+  10. Confidence level filter
+  11. Minimum implied probability floor
+  12. Edge direction (positive after costs)
+  13. Market type allowed
+  14. Portfolio category/event exposure
+  15. Timeline endgame check
 """
 
 from __future__ import annotations
@@ -65,6 +68,7 @@ def check_risk_limits(
     restricted_types: list[str] | None = None,
     drawdown_state: Any | None = None,
     portfolio_gate: tuple[bool, str] = (True, "ok"),
+    confidence_level: str = "LOW",
 ) -> RiskCheckResult:
     """Run all risk checks. Returns TRADE only if ALL pass."""
     violations: list[str] = []
@@ -168,7 +172,39 @@ def check_risk_limits(
             f"{forecast_config.min_evidence_quality:.2f}"
         )
 
-    # 9. Market type check
+    # 9. Confidence level filter — reject LOW confidence trades
+    _CONF_RANK = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
+    min_conf = forecast_config.min_confidence_level if hasattr(forecast_config, "min_confidence_level") else "LOW"
+    if _CONF_RANK.get(confidence_level, 0) < _CONF_RANK.get(min_conf, 0):
+        violations.append(
+            f"LOW_CONFIDENCE: {confidence_level} < minimum {min_conf}"
+        )
+    else:
+        passed.append(f"confidence: {confidence_level} >= {min_conf}")
+
+    # 10. Minimum implied probability — block micro-probability markets
+    min_imp = getattr(risk_config, "min_implied_probability", 0.0)
+    if min_imp > 0 and edge.implied_probability < min_imp:
+        violations.append(
+            f"MIN_IMPLIED_PROB: {edge.implied_probability:.2%} < "
+            f"floor {min_imp:.2%}"
+        )
+    else:
+        passed.append(
+            f"implied_prob: {edge.implied_probability:.2%} >= "
+            f"{min_imp:.2%}"
+        )
+
+    # 11. Edge direction — ensure edge is genuinely positive after costs
+    if not edge.is_positive:
+        violations.append(
+            f"NEGATIVE_EDGE: net_edge {edge.net_edge:.4f} is not positive "
+            f"(costs exceed raw edge)"
+        )
+    else:
+        passed.append(f"edge_direction: positive ({edge.net_edge:.4f})")
+
+    # 12. Market type check
     if allowed_types and market_type not in allowed_types:
         if restricted_types and market_type in restricted_types:
             violations.append(
@@ -184,18 +220,18 @@ def check_risk_limits(
                 f"MARKET_TYPE: {market_type} not in preferred list"
             )
 
-    # 10. Clear resolution source
+    # 13. Clear resolution source
     if not features.has_clear_resolution:
         warnings.append("RESOLUTION: No clear resolution source defined")
 
-    # 11. Portfolio exposure gate
+    # 14. Portfolio exposure gate
     can_add, gate_reason = portfolio_gate
     if not can_add:
         violations.append(f"PORTFOLIO: {gate_reason}")
     else:
         passed.append("portfolio: OK")
 
-    # 12. Timeline endgame check
+    # 15. Timeline endgame check
     if features.is_near_resolution and features.hours_to_resolution < 6:
         warnings.append(
             f"TIMELINE: Only {features.hours_to_resolution:.1f}h to resolution — "

@@ -127,6 +127,7 @@ class TestRiskLimits:
             current_open_positions=3,
             daily_pnl=0.0,
             market_type="MACRO",
+            confidence_level="MEDIUM",
         )
         assert result.allowed is True
         assert len(result.violations) == 0
@@ -224,6 +225,7 @@ class TestRiskLimits:
             features=_features(has_clear_resolution=False),
             risk_config=_risk_cfg(),
             forecast_config=_forecast_cfg(),
+            confidence_level="MEDIUM",
         )
         # Still allowed, but a warning is emitted
         assert result.allowed is True
@@ -328,3 +330,231 @@ class TestPositionSizer:
         edge_no = calculate_edge(implied_prob=0.80, model_prob=0.20)
         ps2 = calculate_position_size(edge=edge_no, risk_config=_risk_cfg(), confidence_level="HIGH")
         assert ps2.direction == "BUY_NO"
+
+
+# ─── New Improvement Tests ──────────────────────────────────────────────
+
+
+class TestConfidenceLevelFilter:
+    """Improvement #1: Reject LOW confidence trades."""
+
+    def test_low_confidence_rejected(self) -> None:
+        result = check_risk_limits(
+            edge=_edge(0.60, 0.70),
+            features=_features(),
+            risk_config=_risk_cfg(),
+            forecast_config=_forecast_cfg(min_confidence_level="MEDIUM"),
+            confidence_level="LOW",
+        )
+        assert result.allowed is False
+        assert any("LOW_CONFIDENCE" in v for v in result.violations)
+
+    def test_medium_confidence_allowed_when_min_medium(self) -> None:
+        result = check_risk_limits(
+            edge=_edge(0.60, 0.70),
+            features=_features(),
+            risk_config=_risk_cfg(),
+            forecast_config=_forecast_cfg(min_confidence_level="MEDIUM"),
+            confidence_level="MEDIUM",
+        )
+        assert not any("CONFIDENCE" in v for v in result.violations)
+
+    def test_high_confidence_always_allowed(self) -> None:
+        result = check_risk_limits(
+            edge=_edge(0.60, 0.70),
+            features=_features(),
+            risk_config=_risk_cfg(),
+            forecast_config=_forecast_cfg(min_confidence_level="HIGH"),
+            confidence_level="HIGH",
+        )
+        assert not any("CONFIDENCE" in v for v in result.violations)
+
+    def test_medium_rejected_when_min_high(self) -> None:
+        result = check_risk_limits(
+            edge=_edge(0.60, 0.70),
+            features=_features(),
+            risk_config=_risk_cfg(),
+            forecast_config=_forecast_cfg(min_confidence_level="HIGH"),
+            confidence_level="MEDIUM",
+        )
+        assert any("LOW_CONFIDENCE" in v for v in result.violations)
+
+    def test_default_confidence_from_config(self) -> None:
+        """Default ForecastingConfig should require MEDIUM."""
+        from src.config import ForecastingConfig as FC
+        fc = FC()
+        assert fc.min_confidence_level == "MEDIUM"
+
+
+class TestMinImpliedProbability:
+    """Improvement #2: Block micro-probability markets (<10%)."""
+
+    def test_micro_prob_blocked(self) -> None:
+        result = check_risk_limits(
+            edge=_edge(0.05, 0.15),  # implied=5%
+            features=_features(),
+            risk_config=_risk_cfg(min_implied_probability=0.10),
+            forecast_config=_forecast_cfg(),
+            confidence_level="HIGH",
+        )
+        assert any("MIN_IMPLIED_PROB" in v for v in result.violations)
+
+    def test_normal_prob_allowed(self) -> None:
+        result = check_risk_limits(
+            edge=_edge(0.60, 0.70),
+            features=_features(),
+            risk_config=_risk_cfg(min_implied_probability=0.10),
+            forecast_config=_forecast_cfg(),
+            confidence_level="MEDIUM",
+        )
+        assert not any("IMPLIED_PROB" in v for v in result.violations)
+
+    def test_boundary_10pct_allowed(self) -> None:
+        """Exactly at 10% should pass (>=, not >)."""
+        result = check_risk_limits(
+            edge=_edge(0.10, 0.20),
+            features=_features(),
+            risk_config=_risk_cfg(min_implied_probability=0.10),
+            forecast_config=_forecast_cfg(),
+            confidence_level="MEDIUM",
+        )
+        assert not any("IMPLIED_PROB" in v for v in result.violations)
+
+    def test_default_config_value(self) -> None:
+        from src.config import RiskConfig as RC
+        rc = RC()
+        assert rc.min_implied_probability == 0.10
+
+
+class TestEvidenceQualityThreshold:
+    """Improvement #3: Raised min_evidence_quality to 0.55."""
+
+    def test_default_raised_to_055(self) -> None:
+        from src.config import ForecastingConfig as FC
+        fc = FC()
+        assert fc.min_evidence_quality == 0.55
+
+    def test_050_evidence_rejected(self) -> None:
+        result = check_risk_limits(
+            edge=_edge(0.60, 0.70),
+            features=_features(evidence_quality=0.50),
+            risk_config=_risk_cfg(),
+            forecast_config=_forecast_cfg(min_evidence_quality=0.55),
+            confidence_level="MEDIUM",
+        )
+        assert any("EVIDENCE_QUALITY" in v for v in result.violations)
+
+
+class TestMaxStakeLowered:
+    """Improvement #5: max_stake_per_market lowered to $50."""
+
+    def test_default_is_50(self) -> None:
+        from src.config import RiskConfig as RC
+        rc = RC()
+        assert rc.max_stake_per_market == 50.0
+
+    def test_position_capped_at_50(self) -> None:
+        edge = _edge(0.50, 0.95)  # huge edge
+        ps = calculate_position_size(
+            edge=edge,
+            risk_config=_risk_cfg(
+                bankroll=100_000.0,
+                max_stake_per_market=50.0,
+                max_bankroll_fraction=0.5,
+            ),
+            confidence_level="HIGH",
+        )
+        assert ps.stake_usd <= 50.0
+
+
+class TestEdgeDirectionCheck:
+    """Improvement #8: Reject trades where net_edge is negative (costs > raw edge)."""
+
+    def test_negative_edge_rejected(self) -> None:
+        """When costs exceed raw edge, is_positive=False → violation."""
+        edge = calculate_edge(
+            implied_prob=0.60, model_prob=0.62,  # raw_edge=0.02
+            transaction_fee_pct=0.05,  # cost=0.05 > 0.02
+        )
+        assert edge.is_positive is False
+        result = check_risk_limits(
+            edge=edge,
+            features=_features(),
+            risk_config=_risk_cfg(min_edge=0.0),  # disable min_edge check
+            forecast_config=_forecast_cfg(),
+            confidence_level="MEDIUM",
+        )
+        assert any("NEGATIVE_EDGE" in v for v in result.violations)
+
+    def test_positive_edge_passes(self) -> None:
+        edge = _edge(0.60, 0.70)
+        assert edge.is_positive is True
+        result = check_risk_limits(
+            edge=edge,
+            features=_features(),
+            risk_config=_risk_cfg(),
+            forecast_config=_forecast_cfg(),
+            confidence_level="MEDIUM",
+        )
+        assert not any("NEGATIVE_EDGE" in v for v in result.violations)
+
+
+class TestEnsembleMinModels:
+    """Improvement #9: min_models_required lowered to 1."""
+
+    def test_default_is_1(self) -> None:
+        from src.config import EnsembleConfig as EC
+        ec = EC()
+        assert ec.min_models_required == 1
+
+
+class TestCategoryStakeMultipliers:
+    """Improvement #7: Category-weighted stake sizing."""
+
+    def test_category_multiplier_reduces_stake(self) -> None:
+        """ELECTION category (0.5x) should produce smaller stake than MACRO (1.0x)."""
+        edge = _edge(0.60, 0.80)
+        rc = _risk_cfg(
+            bankroll=5000.0, max_stake_per_market=5000.0,
+            max_bankroll_fraction=0.99,
+        )
+        ps_macro = calculate_position_size(
+            edge=edge, risk_config=rc, confidence_level="HIGH",
+            category_multiplier=1.0,
+        )
+        ps_election = calculate_position_size(
+            edge=edge, risk_config=rc, confidence_level="HIGH",
+            category_multiplier=0.5,
+        )
+        assert ps_election.stake_usd < ps_macro.stake_usd
+        # Without caps binding, the ratio should be exactly 0.5
+        assert ps_election.stake_usd == pytest.approx(ps_macro.stake_usd * 0.5, rel=0.01)
+
+    def test_category_multiplier_default_1(self) -> None:
+        """Default category_multiplier should be 1.0 (no change)."""
+        edge = _edge(0.60, 0.80)
+        rc = _risk_cfg(bankroll=5000.0, max_stake_per_market=500.0, max_bankroll_fraction=0.5)
+        ps_default = calculate_position_size(edge=edge, risk_config=rc, confidence_level="HIGH")
+        ps_explicit = calculate_position_size(
+            edge=edge, risk_config=rc, confidence_level="HIGH",
+            category_multiplier=1.0,
+        )
+        assert ps_default.stake_usd == ps_explicit.stake_usd
+
+    def test_config_has_category_multipliers(self) -> None:
+        from src.config import RiskConfig as RC
+        rc = RC()
+        assert "MACRO" in rc.category_stake_multipliers
+        assert rc.category_stake_multipliers["MACRO"] == 1.0
+        assert rc.category_stake_multipliers["ELECTION"] == 0.50
+        assert rc.category_stake_multipliers["CORPORATE"] == 0.75
+
+
+class TestStopLossTakeProfit:
+    """Improvement #6: Stop-loss / take-profit config defaults."""
+
+    def test_config_defaults(self) -> None:
+        from src.config import RiskConfig as RC
+        rc = RC()
+        assert rc.stop_loss_pct == 0.20
+        assert rc.take_profit_pct == 0.30

@@ -37,7 +37,8 @@ forecasting:
   llm_temperature: 0.2
   llm_max_tokens: 4096
   low_evidence_penalty: 0.15
-  min_evidence_quality: 0.3
+  min_evidence_quality: 0.55        # Raised from 0.3 — low quality trades lose money
+  min_confidence_level: MEDIUM      # Reject LOW confidence trades (75% loss rate)
 
 ensemble:
   enabled: true
@@ -46,12 +47,12 @@ ensemble:
     - claude-3-5-sonnet-20241022
     - gemini-1.5-pro
   aggregation: trimmed_mean        # trimmed_mean | median | weighted
-  min_models_required: 2
+  min_models_required: 1           # Lowered from 2 — only OpenAI works currently
   fallback_model: gpt-4o
   timeout_per_model_secs: 30
 
 risk:
-  max_stake_per_market: 100.0
+  max_stake_per_market: 50.0       # Lowered from 100 — smaller stakes win more
   max_daily_loss: 500.0
   max_open_positions: 10
   min_edge: 0.05
@@ -62,6 +63,13 @@ risk:
   bankroll: 5000.0
   transaction_fee_pct: 0.02
   gas_cost_usd: 0.01
+  min_implied_probability: 0.10    # Block micro-probability markets (<10%)
+  stop_loss_pct: 0.20              # Auto-exit at -20% loss
+  take_profit_pct: 0.30            # Auto-exit at +30% gain
+  category_stake_multipliers:
+    MACRO: 1.0                     # Full size — 100% win rate historically
+    CORPORATE: 0.75                # Reduced — 50% win rate
+    ELECTION: 0.50                 # Half size — 25% win rate
 
 drawdown:
   enabled: true

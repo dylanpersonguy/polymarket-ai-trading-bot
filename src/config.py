@@ -57,7 +57,8 @@ class ForecastingConfig(BaseModel):
     llm_max_tokens: int = 4096
     calibration_method: str = "platt"
     low_evidence_penalty: float = 0.15
-    min_evidence_quality: float = 0.3
+    min_evidence_quality: float = 0.55
+    min_confidence_level: str = "MEDIUM"  # Reject LOW confidence trades
 
 
 class EnsembleConfig(BaseModel):
@@ -72,12 +73,12 @@ class EnsembleConfig(BaseModel):
         "gpt-4o": 0.40, "claude-3-5-sonnet-20241022": 0.35, "gemini-1.5-pro": 0.25
     })
     timeout_per_model_secs: int = 30
-    min_models_required: int = 2
+    min_models_required: int = 1
     fallback_model: str = "gpt-4o"
 
 
 class RiskConfig(BaseModel):
-    max_stake_per_market: float = 100.0
+    max_stake_per_market: float = 50.0
     max_daily_loss: float = 500.0
     max_open_positions: int = 10
     min_edge: float = 0.05
@@ -89,6 +90,16 @@ class RiskConfig(BaseModel):
     bankroll: float = 5000.0
     transaction_fee_pct: float = 0.02
     gas_cost_usd: float = 0.01
+    min_implied_probability: float = 0.10  # Block micro-probability markets
+    stop_loss_pct: float = 0.20  # Exit when position loses 20%
+    take_profit_pct: float = 0.30  # Exit when position gains 30%
+    category_stake_multipliers: dict[str, float] = Field(
+        default_factory=lambda: {
+            "MACRO": 1.0,
+            "CORPORATE": 0.75,
+            "ELECTION": 0.50,
+        }
+    )
 
 
 class DrawdownConfig(BaseModel):
