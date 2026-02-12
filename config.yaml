@@ -54,7 +54,7 @@ ensemble:
 risk:
   max_stake_per_market: 50.0       # Lowered from 100 — smaller stakes win more
   max_daily_loss: 500.0
-  max_open_positions: 10
+  max_open_positions: 25
   min_edge: 0.05
   min_liquidity: 500.0
   max_spread: 0.04

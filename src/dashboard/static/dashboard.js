@@ -380,20 +380,29 @@ async function updateTrades() {
     if (!d) return;
     const tbody = $('#trades-body');
     if (!d.trades || d.trades.length === 0) {
-        safeHTML(tbody, '<tr><td colspan="9" class="empty-state">No trades yet</td></tr>');
+        safeHTML(tbody, '<tr><td colspan="11" class="empty-state">No trades yet</td></tr>');
         return;
     }
-    safeHTML(tbody, d.trades.map(t => `<tr>
+    safeHTML(tbody, d.trades.map(t => {
+        const pnl = t.pnl != null ? t.pnl : null;
+        const pnlClass = pnl > 0 ? 'pnl-positive' : pnl < 0 ? 'pnl-negative' : '';
+        const pnlStr = pnl != null ? (pnl >= 0 ? '+' : '') + fmtD(pnl) : '—';
+        const entry = t.entry_price != null ? fmt(t.entry_price, 3) : fmt(t.price, 3);
+        const exit = t.exit_price != null ? fmt(t.exit_price, 3) : '—';
+        return `<tr>
         <td title="${t.question||''}">${(t.question||t.market_id||'').substring(0,50)}</td>
         <td>${t.market_type||'—'}</td>
         <td><span class="pill ${t.side==='BUY'?'pill-buy':'pill-sell'}">${t.side||'—'}</span></td>
-        <td>${fmt(t.price,3)}</td>
+        <td>${entry}</td>
+        <td>${exit}</td>
         <td>${fmt(t.size,1)}</td>
         <td>${fmtD(t.stake_usd)}</td>
+        <td class="${pnlClass}" style="font-weight:700">${pnlStr}</td>
         <td><span class="pill ${pillClass(t.status)}">${t.status||'—'}</span></td>
         <td>${t.dry_run ? '🧪 Paper' : '💰 Live'}</td>
         <td>${shortDate(t.created_at)}</td>
-    </tr>`).join(''));
+    </tr>`;
+    }).join(''));
 }
 
 // ─── Audit Trail ────────────────────────────────────────────────

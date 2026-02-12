@@ -440,9 +440,12 @@ def api_trades() -> Any:
     _ensure_tables(conn)
     try:
         rows = conn.execute("""
-            SELECT t.*, m.question, m.market_type
+            SELECT t.*,
+                   m.question, m.market_type,
+                   p.entry_price, p.current_price AS exit_price, p.pnl
             FROM trades t
             LEFT JOIN markets m ON t.market_id = m.id
+            LEFT JOIN positions p ON t.market_id = p.market_id
             ORDER BY t.created_at DESC
             LIMIT 100
         """).fetchall()

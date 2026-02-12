@@ -80,7 +80,7 @@ class EnsembleConfig(BaseModel):
 class RiskConfig(BaseModel):
     max_stake_per_market: float = 50.0
     max_daily_loss: float = 500.0
-    max_open_positions: int = 10
+    max_open_positions: int = 25
     min_edge: float = 0.05
     min_liquidity: float = 500.0
     max_spread: float = 0.04
