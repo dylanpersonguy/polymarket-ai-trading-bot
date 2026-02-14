@@ -136,6 +136,19 @@ def _hard_reject(market: Any, blocked_types: set[str] | None = None,
     if not getattr(market, "active", True):
         return "market_inactive"
 
+    # Minimum liquidity and volume thresholds (configurable)
+    liq = getattr(market, "liquidity", 0.0)
+    vol = getattr(market, "volume", 0.0)
+    min_liquidity = getattr(market, "min_liquidity", 2000)
+    min_volume = getattr(market, "min_volume", 1000)
+    # If market object doesn't have min_liquidity/min_volume, fallback to config values
+    if hasattr(market, "config"):
+        min_liquidity = getattr(market.config.risk, "min_liquidity", min_liquidity)
+        min_volume = getattr(market.config.risk, "min_volume", min_volume)
+    if liq < min_liquidity:
+        return f"liquidity_below_threshold:{liq:.0f}"
+    if vol < min_volume:
+        return f"volume_below_threshold:{vol:.0f}"
     # ── Market too old ───────────────────────────────────────────
     if max_market_age_hours is not None and max_market_age_hours > 0:
         age = getattr(market, "age_hours", None)
@@ -159,12 +172,12 @@ def _hard_reject(market: Any, blocked_types: set[str] | None = None,
 
     # Extreme implied probability — no realistic edge opportunity
     prob = getattr(market, "best_bid", 0.5)
-    if prob < 0.05 or prob > 0.95:
+    if prob < 0.02 or prob > 0.98:
         return f"extreme_probability:{prob:.2f}"
 
     # Very wide spread — illiquid, will eat into edge
     spread = getattr(market, "spread", 1.0)
-    if spread > 0.20:
+    if spread > 0.30:
         return f"wide_spread:{spread:.2f}"
 
     return None
@@ -180,25 +193,33 @@ def _score_market(market: Any, preferred_types: list[str] | None = None,
 
     # ── Liquidity ────────────────────────────────────────────────────
     liq = getattr(market, "liquidity", 0.0)
-    if liq >= 50_000:
+    if liq >= 100_000:
+        breakdown["liquidity"] = 20
+    elif liq >= 50_000:
         breakdown["liquidity"] = 15
-    elif liq >= 10_000:
-        breakdown["liquidity"] = 8
-    elif liq >= 1_000:
+    elif liq >= 20_000:
+        breakdown["liquidity"] = 10
+    elif liq >= 5_000:
+        breakdown["liquidity"] = 5
+    elif liq >= 2_000:
         breakdown["liquidity"] = 0
     else:
-        breakdown["liquidity"] = -30
+        breakdown["liquidity"] = -10
 
     # ── Volume ───────────────────────────────────────────────────────
     vol = getattr(market, "volume", 0.0)
-    if vol >= 100_000:
+    if vol >= 500_000:
+        breakdown["volume"] = 15
+    elif vol >= 100_000:
         breakdown["volume"] = 10
     elif vol >= 20_000:
         breakdown["volume"] = 5
     elif vol >= 5_000:
+        breakdown["volume"] = 2
+    elif vol >= 1_000:
         breakdown["volume"] = 0
     else:
-        breakdown["volume"] = -15
+        breakdown["volume"] = -5
 
     # ── Implied probability sweet spot ───────────────────────────────
     prob = getattr(market, "best_bid", 0.5)
@@ -291,16 +312,20 @@ def _score_market(market: Any, preferred_types: list[str] | None = None,
     # ── Freshness bonus — younger markets are prioritised ────────────
     age = getattr(market, "age_hours", None)
     if age is not None:
-        if age <= 1:
+        if age <= 2:
             breakdown["freshness"] = 20   # brand-new
-        elif age <= 3:
-            breakdown["freshness"] = 15
         elif age <= 6:
+            breakdown["freshness"] = 15
+        elif age <= 24:
             breakdown["freshness"] = 10
-        elif age <= 12:
-            breakdown["freshness"] = 5
+        elif age <= 72:
+            breakdown["freshness"] = 5    # 1-3 days
+        elif age <= 168:
+            breakdown["freshness"] = 2    # up to 1 week
+        elif age <= 720:
+            breakdown["freshness"] = 0    # up to 30 days
         else:
-            breakdown["freshness"] = 0    # older (but not hard-rejected)
+            breakdown["freshness"] = -5   # very old
 
     total = max(0, min(100, base + sum(breakdown.values())))
     return total, breakdown

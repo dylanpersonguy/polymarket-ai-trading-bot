@@ -54,6 +54,8 @@ def calculate_position_size(
     portfolio_gate: tuple[bool, str] = (True, "ok"),
     regime_multiplier: float = 1.0,
     category_multiplier: float = 1.0,
+    liquidity_usd: float = 0.0,
+    max_liquidity_pct: float = 0.05,
 ) -> PositionSize:
     """Calculate position size using fractional Kelly with drawdown + timeline adjustments.
 
@@ -69,6 +71,7 @@ def calculate_position_size(
       - drawdown_multiplier: from DrawdownManager (0-1)
       - timeline_multiplier: from TimelineAssessment (0.5-1.3)
       - volatility adjustment: reduces sizing for volatile markets
+      - liquidity_usd: available liquidity; stake capped to max_liquidity_pct × liquidity
     """
     # Portfolio gate check
     can_trade, gate_reason = portfolio_gate
@@ -129,7 +132,12 @@ def calculate_position_size(
     max_stake = risk_config.max_stake_per_market
     max_bankroll = risk_config.max_bankroll_fraction * risk_config.bankroll
 
-    stake = min(full_kelly_stake, max_stake, max_bankroll)
+    # Liquidity-adjusted cap: never take more than X% of available liquidity
+    max_liquidity = float("inf")
+    if liquidity_usd > 0:
+        max_liquidity = liquidity_usd * max_liquidity_pct
+
+    stake = min(full_kelly_stake, max_stake, max_bankroll, max_liquidity)
     stake = max(0.0, stake)
 
     # Determine what capped it
@@ -139,6 +147,8 @@ def calculate_position_size(
         capped_by = "kelly"
     elif stake >= max_stake - 0.01:
         capped_by = "max_stake"
+    elif liquidity_usd > 0 and stake >= max_liquidity - 0.01:
+        capped_by = "liquidity"
     else:
         capped_by = "max_bankroll"
 

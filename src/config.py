@@ -22,19 +22,19 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 class ScanningConfig(BaseModel):
-    min_volume_usd: float = 5000
-    min_liquidity_usd: float = 1000
-    max_spread: float = 0.05
-    max_days_to_expiry: int = 90
-    max_market_age_hours: float = 12.0  # Only analyse markets younger than this
+    min_volume_usd: float = 1000
+    min_liquidity_usd: float = 500
+    max_spread: float = 0.08
+    max_days_to_expiry: int = 120
+    max_market_age_hours: float = 720.0  # 30 days — most Polymarket markets are older
     categories: list[str] = Field(default_factory=list)
-    batch_size: int = 50
-    preferred_types: list[str] = Field(default_factory=lambda: ["MACRO", "ELECTION", "CORPORATE"])
-    restricted_types: list[str] = Field(default_factory=lambda: ["WEATHER", "SPORTS"])
+    batch_size: int = 100
+    preferred_types: list[str] = Field(default_factory=lambda: ["MACRO", "ELECTION", "CORPORATE", "LEGAL", "TECHNOLOGY", "SCIENCE"])
+    restricted_types: list[str] = Field(default_factory=lambda: ["WEATHER"])
     # Pre-research filter settings
-    filter_min_score: int = 45
+    filter_min_score: int = 25
     filter_blocked_types: list[str] = Field(default_factory=lambda: ["UNKNOWN"])
-    research_cooldown_minutes: int = 240
+    research_cooldown_minutes: int = 60
 
 
 class ResearchConfig(BaseModel):
@@ -44,7 +44,7 @@ class ResearchConfig(BaseModel):
     secondary_domains: list[str] = Field(default_factory=list)
     blocked_domains: list[str] = Field(default_factory=list)
     min_corroborating_sources: int = 2
-    search_provider: str = "serpapi"
+    search_provider: str = "fallback"
     fetch_full_content: bool = True
     max_content_length: int = 15000
     content_fetch_top_n: int = 5
@@ -82,19 +82,20 @@ class RiskConfig(BaseModel):
     max_stake_per_market: float = 50.0
     max_daily_loss: float = 500.0
     max_open_positions: int = 25
-    min_edge: float = 0.05
-    min_liquidity: float = 500.0
-    max_spread: float = 0.04
+    min_edge: float = 0.04
+    min_liquidity: float = 2000
+    min_volume: float = 1000
+    max_spread: float = 0.06
     kelly_fraction: float = 0.25
     max_bankroll_fraction: float = 0.05
     kill_switch: bool = False
     bankroll: float = 5000.0
     transaction_fee_pct: float = 0.02
     gas_cost_usd: float = 0.01
-    min_implied_probability: float = 0.10  # Block micro-probability markets
+    min_implied_probability: float = 0.05  # Block micro-probability markets
     stop_loss_pct: float = 0.20  # Exit when position loses 20%
     take_profit_pct: float = 0.30  # Exit when position gains 30%
-    max_holding_hours: float = 72.0  # Auto-exit positions held longer than this
+    max_holding_hours: float = 240.0  # Auto-exit positions held longer than this (10 days)
     category_stake_multipliers: dict[str, float] = Field(
         default_factory=lambda: {
             "MACRO": 1.0,
@@ -202,6 +203,12 @@ class AlertsConfig(BaseModel):
     telegram_chat_id: str = ""
     discord_webhook_url: str = ""
     slack_webhook_url: str = ""
+    email_smtp_host: str = ""
+    email_smtp_port: int = 587
+    email_smtp_user: str = ""
+    email_smtp_password: str = ""
+    email_from: str = ""
+    email_to: str = ""
     alert_on_trade: bool = True
     alert_on_risk_breach: bool = True
     alert_on_drawdown_warning: bool = True

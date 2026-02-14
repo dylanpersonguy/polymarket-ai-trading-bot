@@ -363,3 +363,128 @@ class Database:
             "SELECT * FROM trades ORDER BY created_at DESC LIMIT ?", (limit,)
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # ── Watchlist ────────────────────────────────────────────────────
+
+    def add_to_watchlist(self, market_id: str, question: str, category: str = "", notes: str = "") -> None:
+        import datetime as _dt
+        self.conn.execute(
+            "INSERT OR REPLACE INTO watchlist (market_id, question, category, added_at, notes) VALUES (?,?,?,?,?)",
+            (market_id, question, category, _dt.datetime.now(_dt.timezone.utc).isoformat(), notes),
+        )
+        self.conn.commit()
+
+    def remove_from_watchlist(self, market_id: str) -> None:
+        self.conn.execute("DELETE FROM watchlist WHERE market_id = ?", (market_id,))
+        self.conn.commit()
+
+    def get_watchlist(self) -> list[dict]:
+        rows = self.conn.execute("SELECT * FROM watchlist ORDER BY added_at DESC").fetchall()
+        return [dict(r) for r in rows]
+
+    def is_on_watchlist(self, market_id: str) -> bool:
+        row = self.conn.execute("SELECT 1 FROM watchlist WHERE market_id = ?", (market_id,)).fetchone()
+        return row is not None
+
+    # ── Trade Journal ────────────────────────────────────────────────
+
+    def insert_journal_entry(
+        self, market_id: str, question: str, direction: str,
+        entry_price: float, exit_price: float, stake_usd: float, pnl: float,
+        annotation: str = "", reasoning: str = "", lessons_learned: str = "",
+        tags: str = "[]",
+    ) -> int:
+        import datetime as _dt
+        now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+        cur = self.conn.execute(
+            """INSERT INTO trade_journal
+                (market_id, question, direction, entry_price, exit_price,
+                 stake_usd, pnl, annotation, reasoning, lessons_learned, tags,
+                 created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (market_id, question, direction, entry_price, exit_price,
+             stake_usd, pnl, annotation, reasoning, lessons_learned, tags,
+             now, now),
+        )
+        self.conn.commit()
+        return cur.lastrowid or 0
+
+    def update_journal_annotation(self, journal_id: int, annotation: str, lessons_learned: str = "") -> None:
+        import datetime as _dt
+        self.conn.execute(
+            "UPDATE trade_journal SET annotation = ?, lessons_learned = ?, updated_at = ? WHERE id = ?",
+            (annotation, lessons_learned, _dt.datetime.now(_dt.timezone.utc).isoformat(), journal_id),
+        )
+        self.conn.commit()
+
+    def get_journal_entries(self, limit: int = 100) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM trade_journal ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ── Equity Snapshots ─────────────────────────────────────────────
+
+    def insert_equity_snapshot(
+        self, equity: float, invested: float, cash: float,
+        unrealised_pnl: float, realised_pnl: float, num_positions: int,
+        daily_var: float = 0.0, drawdown_pct: float = 0.0,
+    ) -> None:
+        import datetime as _dt
+        self.conn.execute(
+            """INSERT INTO equity_snapshots
+                (timestamp, equity, invested, cash, unrealised_pnl, realised_pnl,
+                 num_positions, daily_var, drawdown_pct)
+            VALUES (?,?,?,?,?,?,?,?,?)""",
+            (_dt.datetime.now(_dt.timezone.utc).isoformat(), equity, invested, cash,
+             unrealised_pnl, realised_pnl, num_positions, daily_var, drawdown_pct),
+        )
+        self.conn.commit()
+
+    def get_equity_snapshots(self, limit: int = 500) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM equity_snapshots ORDER BY timestamp DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in reversed([dict(r) for r in rows])]
+
+    # ── VaR History ──────────────────────────────────────────────────
+
+    def insert_var_record(
+        self, daily_var_95: float, daily_var_99: float,
+        portfolio_value: float, num_positions: int,
+        method: str = "parametric", details_json: str = "{}",
+    ) -> None:
+        import datetime as _dt
+        self.conn.execute(
+            """INSERT INTO var_history
+                (timestamp, daily_var_95, daily_var_99, portfolio_value,
+                 num_positions, method, details_json)
+            VALUES (?,?,?,?,?,?,?)""",
+            (_dt.datetime.now(_dt.timezone.utc).isoformat(), daily_var_95, daily_var_99,
+             portfolio_value, num_positions, method, details_json),
+        )
+        self.conn.commit()
+
+    def get_var_history(self, limit: int = 100) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM var_history ORDER BY timestamp DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ── Calibration History ──────────────────────────────────────────
+
+    def get_calibration_history(self, limit: int = 500) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM calibration_history ORDER BY recorded_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ── Maintenance ──────────────────────────────────────────────────
+
+    def vacuum(self) -> None:
+        """Run VACUUM to reclaim space and optimize the database."""
+        try:
+            self.conn.execute("VACUUM")
+            log.info("database.vacuum_complete")
+        except Exception as e:
+            log.warning("database.vacuum_error", error=str(e))

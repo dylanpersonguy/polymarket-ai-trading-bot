@@ -264,6 +264,81 @@ class RebalanceSignal:
         return self.__dict__
 
 
+def calculate_portfolio_var(
+    positions: list[PositionSnapshot],
+    bankroll: float,
+    confidence_level: float = 0.95,
+    method: str = "parametric",
+) -> dict[str, Any]:
+    """Compute portfolio Value-at-Risk.
+
+    Parametric approach: treats each binary position as an independent
+    Bernoulli bet.  Loss for each position = stake × (1 − current_price).
+    VaR is estimated using the normal approximation over the portfolio of
+    independent bets.
+
+    Returns dict with daily_var_95, daily_var_99, component details.
+    """
+    import math
+
+    if not positions:
+        return {
+            "daily_var_95": 0.0,
+            "daily_var_99": 0.0,
+            "portfolio_value": bankroll,
+            "num_positions": 0,
+            "method": method,
+            "components": [],
+        }
+
+    components: list[dict[str, Any]] = []
+    total_variance = 0.0
+
+    for pos in positions:
+        p = max(min(pos.current_price, 0.99), 0.01)
+        q = 1 - p
+        # Expected loss = exposure × q  (probability of losing)
+        # Variance of loss for a Bernoulli outcome
+        mean_loss = pos.exposure_usd * q
+        var_loss = pos.exposure_usd ** 2 * p * q
+        total_variance += var_loss
+        components.append({
+            "market_id": pos.market_id,
+            "exposure": round(pos.exposure_usd, 2),
+            "current_price": round(p, 4),
+            "expected_loss": round(mean_loss, 2),
+        })
+
+    portfolio_std = math.sqrt(total_variance) if total_variance > 0 else 0.0
+    mean_total_loss = sum(c["expected_loss"] for c in components)
+
+    # z-scores for confidence levels
+    z_95 = 1.645
+    z_99 = 2.326
+
+    var_95 = mean_total_loss + z_95 * portfolio_std
+    var_99 = mean_total_loss + z_99 * portfolio_std
+
+    result = {
+        "daily_var_95": round(var_95, 2),
+        "daily_var_99": round(var_99, 2),
+        "portfolio_value": round(bankroll, 2),
+        "num_positions": len(positions),
+        "mean_expected_loss": round(mean_total_loss, 2),
+        "portfolio_std": round(portfolio_std, 2),
+        "method": method,
+        "components": components,
+    }
+
+    log.info(
+        "portfolio_risk.var_calculated",
+        var_95=result["daily_var_95"],
+        var_99=result["daily_var_99"],
+        positions=len(positions),
+    )
+    return result
+
+
 def check_correlation(
     existing_positions: list[PositionSnapshot],
     new_question: str,

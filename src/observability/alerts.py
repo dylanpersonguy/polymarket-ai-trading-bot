@@ -118,6 +118,13 @@ class AlertManager:
             except Exception as e:
                 log.error("alert.slack_error", error=str(e))
 
+        if self.alerts_config.email_smtp_host and self.alerts_config.email_to:
+            try:
+                await self._send_email(alert)
+                alert.channels_sent.append("email")
+            except Exception as e:
+                log.error("alert.email_error", error=str(e))
+
         self._history.append(alert)
         if len(self._history) > 500:
             self._history = self._history[-250:]
@@ -194,6 +201,34 @@ class AlertManager:
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=10),
             )
+
+    async def _send_email(self, alert: Alert) -> None:
+        """Send alert via SMTP email."""
+        import smtplib
+        from email.mime.text import MIMEText
+        import asyncio
+
+        cfg = self.alerts_config
+        emoji = {"info": "ℹ️", "warning": "⚠️", "critical": "🚨"}.get(alert.level, "📢")
+        subject = f"{emoji} [{alert.level.upper()}] {alert.title}"
+        body = f"{alert.title}\n\n{alert.message}\n\nTimestamp: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(alert.timestamp))}"
+
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = cfg.email_from or cfg.email_smtp_user
+        msg["To"] = cfg.email_to
+
+        def _blocking_send():
+            with smtplib.SMTP(cfg.email_smtp_host, cfg.email_smtp_port, timeout=15) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                if cfg.email_smtp_user:
+                    server.login(cfg.email_smtp_user, cfg.email_smtp_password)
+                server.sendmail(msg["From"], [cfg.email_to], msg.as_string())
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _blocking_send)
 
     # Convenience methods
 

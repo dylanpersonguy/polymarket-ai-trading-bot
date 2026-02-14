@@ -200,11 +200,29 @@ class BingProvider(SearchProvider):
 # ── Tavily Provider ──────────────────────────────────────────────────
 
 class TavilyProvider(SearchProvider):
-    """Tavily AI search API."""
+    """Tavily AI search API with automatic key rotation."""
 
     def __init__(self, api_key: str | None = None):
-        self._key = api_key or os.environ.get("TAVILY_API_KEY", "")
+        raw = api_key or os.environ.get("TAVILY_API_KEY", "")
+        self._keys = [k.strip() for k in raw.split(",") if k.strip()]
+        if not self._keys:
+            log.warning("tavily.no_key", msg="TAVILY_API_KEY not set; searches will fail")
+            self._keys = [""]
+        self._key_index = 0
         self._client = httpx.AsyncClient(timeout=20.0)
+
+    @property
+    def _key(self) -> str:
+        return self._keys[self._key_index]
+
+    def _rotate_key(self) -> bool:
+        """Rotate to next key. Returns True if a new key is available."""
+        next_idx = self._key_index + 1
+        if next_idx < len(self._keys):
+            self._key_index = next_idx
+            log.info("tavily.key_rotated", key_index=next_idx, total_keys=len(self._keys))
+            return True
+        return False
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -222,6 +240,19 @@ class TavilyProvider(SearchProvider):
                 "include_answer": False,
             },
         )
+        # On rate limit or auth error, try rotating to next key before raising
+        if resp.status_code in (429, 401, 403) and self._rotate_key():
+            log.warning("tavily.rate_limited", msg="Retrying with rotated key")
+            resp = await self._client.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": self._key,
+                    "query": query,
+                    "max_results": num_results,
+                    "search_depth": "advanced",
+                    "include_answer": False,
+                },
+            )
         resp.raise_for_status()
         data = resp.json()
         results: list[SearchResult] = []
@@ -259,12 +290,12 @@ class FallbackSearchProvider(SearchProvider):
 
     If the primary provider fails (429, timeout, auth error), it
     automatically falls through to the next available provider.
-    Default chain: serpapi → bing → tavily.
+    Default chain: serpapi → tavily.
     """
 
     def __init__(self, chain: list[str] | None = None):
         if chain is None:
-            chain = ["serpapi", "bing", "tavily"]
+            chain = ["serpapi", "tavily"]
         self._chain: list[SearchProvider] = []
         for name in chain:
             cls = _PROVIDERS.get(name.lower())

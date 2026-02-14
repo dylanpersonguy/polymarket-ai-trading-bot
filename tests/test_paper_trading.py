@@ -515,7 +515,7 @@ class TestRiskConfigMaxHolding:
     def test_default_value(self) -> None:
         from src.config import RiskConfig
         cfg = RiskConfig()
-        assert cfg.max_holding_hours == 72.0
+        assert cfg.max_holding_hours == 240.0
 
     def test_custom_value(self) -> None:
         from src.config import RiskConfig

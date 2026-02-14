@@ -8,7 +8,7 @@ from src.observability.logger import get_logger
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 10
 
 _MIGRATIONS: dict[int, list[str]] = {
     1: [
@@ -512,6 +512,219 @@ _MIGRATIONS: dict[int, list[str]] = {
         """,
         """
         CREATE INDEX IF NOT EXISTS idx_closed_pos_reason ON closed_positions(close_reason);
+        """,
+    ],
+
+    # ── Migration 9: Watchlist, Trade Journal, Equity Snapshots, VaR ──
+    9: [
+        # Market watchlist — user-pinned markets to always track
+        """
+        CREATE TABLE IF NOT EXISTS watchlist (
+            market_id TEXT PRIMARY KEY,
+            question TEXT,
+            category TEXT DEFAULT '',
+            added_at TEXT DEFAULT (datetime('now')),
+            notes TEXT DEFAULT ''
+        );
+        """,
+
+        # Trade journal — AI-annotated trade records for learning
+        """
+        CREATE TABLE IF NOT EXISTS trade_journal (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            market_id TEXT NOT NULL,
+            question TEXT,
+            direction TEXT,
+            entry_price REAL DEFAULT 0,
+            exit_price REAL DEFAULT 0,
+            stake_usd REAL DEFAULT 0,
+            pnl REAL DEFAULT 0,
+            annotation TEXT DEFAULT '',
+            reasoning TEXT DEFAULT '',
+            lessons_learned TEXT DEFAULT '',
+            tags TEXT DEFAULT '[]',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_journal_market ON trade_journal(market_id);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_journal_created ON trade_journal(created_at);
+        """,
+
+        # Equity snapshots — periodic snapshots for P&L curve
+        """
+        CREATE TABLE IF NOT EXISTS equity_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            equity REAL NOT NULL,
+            invested REAL DEFAULT 0,
+            cash REAL DEFAULT 0,
+            unrealised_pnl REAL DEFAULT 0,
+            realised_pnl REAL DEFAULT 0,
+            num_positions INTEGER DEFAULT 0,
+            daily_var REAL DEFAULT 0,
+            drawdown_pct REAL DEFAULT 0
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_equity_snap_ts ON equity_snapshots(timestamp);
+        """,
+
+        # VaR history — daily Value at Risk calculations
+        """
+        CREATE TABLE IF NOT EXISTS var_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            daily_var_95 REAL DEFAULT 0,
+            daily_var_99 REAL DEFAULT 0,
+            portfolio_value REAL DEFAULT 0,
+            num_positions INTEGER DEFAULT 0,
+            method TEXT DEFAULT 'parametric',
+            details_json TEXT DEFAULT '{}'
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_var_ts ON var_history(timestamp);
+        """,
+    ],
+
+    # ── Migration 10: Strategies & Wallets ───────────────────────
+    10: [
+        # User-managed wallets (live Polymarket wallets + paper/simulated wallets)
+        """
+        CREATE TABLE IF NOT EXISTS wallets (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            wallet_type TEXT NOT NULL DEFAULT 'paper',
+            address TEXT DEFAULT '',
+            initial_balance REAL DEFAULT 10000,
+            current_balance REAL DEFAULT 10000,
+            total_pnl REAL DEFAULT 0,
+            total_trades INTEGER DEFAULT 0,
+            win_count INTEGER DEFAULT 0,
+            loss_count INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            color TEXT DEFAULT '#4c8dff',
+            icon TEXT DEFAULT '💰',
+            notes TEXT DEFAULT '',
+            created_at TEXT,
+            updated_at TEXT
+        );
+        """,
+
+        # Trading strategies that users can create and assign to wallets
+        """
+        CREATE TABLE IF NOT EXISTS strategies (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            strategy_type TEXT NOT NULL DEFAULT 'ai_trading',
+            description TEXT DEFAULT '',
+            config_json TEXT DEFAULT '{}',
+            risk_profile TEXT DEFAULT 'moderate',
+            is_active INTEGER DEFAULT 1,
+            icon TEXT DEFAULT '🤖',
+            color TEXT DEFAULT '#00e68a',
+            created_at TEXT,
+            updated_at TEXT
+        );
+        """,
+
+        # Many-to-many: a strategy runs on a wallet (one wallet can have many strategies)
+        """
+        CREATE TABLE IF NOT EXISTS strategy_wallets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            strategy_id TEXT NOT NULL,
+            wallet_id TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            allocated_balance REAL DEFAULT 0,
+            current_pnl REAL DEFAULT 0,
+            total_trades INTEGER DEFAULT 0,
+            win_count INTEGER DEFAULT 0,
+            loss_count INTEGER DEFAULT 0,
+            last_trade_at TEXT,
+            created_at TEXT,
+            FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE,
+            FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE CASCADE,
+            UNIQUE(strategy_id, wallet_id)
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_sw_strategy ON strategy_wallets(strategy_id);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_sw_wallet ON strategy_wallets(wallet_id);
+        """,
+
+        # Per-wallet trade log (links trades to wallets and strategies)
+        """
+        CREATE TABLE IF NOT EXISTS wallet_trades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            wallet_id TEXT NOT NULL,
+            strategy_id TEXT DEFAULT '',
+            market_id TEXT NOT NULL,
+            question TEXT DEFAULT '',
+            side TEXT DEFAULT '',
+            entry_price REAL DEFAULT 0,
+            exit_price REAL DEFAULT 0,
+            size REAL DEFAULT 0,
+            stake_usd REAL DEFAULT 0,
+            pnl REAL DEFAULT 0,
+            status TEXT DEFAULT 'open',
+            is_paper INTEGER DEFAULT 1,
+            opened_at TEXT,
+            closed_at TEXT,
+            FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE CASCADE
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_wt_wallet ON wallet_trades(wallet_id);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_wt_strategy ON wallet_trades(strategy_id);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_wt_status ON wallet_trades(status);
+        """,
+
+        # Per-wallet equity snapshots for individual wallet P&L curves
+        """
+        CREATE TABLE IF NOT EXISTS wallet_equity_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            wallet_id TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            equity REAL DEFAULT 0,
+            invested REAL DEFAULT 0,
+            cash REAL DEFAULT 0,
+            unrealised_pnl REAL DEFAULT 0,
+            realised_pnl REAL DEFAULT 0,
+            num_positions INTEGER DEFAULT 0,
+            FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE CASCADE
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_we_wallet ON wallet_equity_snapshots(wallet_id);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_we_ts ON wallet_equity_snapshots(timestamp);
+        """,
+
+        # Seed a default paper wallet so the dashboard is not empty
+        """
+        INSERT OR IGNORE INTO wallets (id, name, wallet_type, initial_balance, current_balance, color, icon, created_at, updated_at)
+        VALUES ('default-paper', 'Paper Trading Wallet', 'paper', 10000, 10000, '#4c8dff', '📄', datetime('now'), datetime('now'));
+        """,
+        # Seed the default AI Trading strategy
+        """
+        INSERT OR IGNORE INTO strategies (id, name, strategy_type, description, risk_profile, icon, color, created_at, updated_at)
+        VALUES ('default-ai', 'AI Trading', 'ai_trading', 'Automated AI-powered trading using multi-model ensemble forecasting', 'moderate', '🤖', '#00e68a', datetime('now'), datetime('now'));
+        """,
+        # Bind default strategy to default wallet
+        """
+        INSERT OR IGNORE INTO strategy_wallets (strategy_id, wallet_id, allocated_balance, created_at)
+        VALUES ('default-ai', 'default-paper', 10000, datetime('now'));
         """,
     ],
 }
