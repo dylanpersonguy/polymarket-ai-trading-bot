@@ -1,438 +1,874 @@
-<div align="center"><div align="center"><p align="center"># Polymarket Research & Trading Bot
+# 🤖 Polymarket AI Trading Bot<div align="center"><div align="center"><p align="center"># Polymarket Research & Trading Bot
 
 
 
-# 🤖 Polymarket AI Trading Bot
+### Autonomous AI-Powered Trading System for Polymarket Prediction Markets
 
 
 
-**Autonomous prediction market trading powered by AI research & multi-model forecasting**# Polymarket AI Research Trading Bot  <h1 align="center">Polymarket AI Research Trading Bot</h1>
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://python.org) [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg?style=flat)](LICENSE) [![Docker Ready](https://img.shields.io/badge/docker-ready-2496ED.svg?style=flat&logo=docker&logoColor=white)](Dockerfile)# 🤖 Polymarket AI Trading Bot
 
 
 
-[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-
-[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](Dockerfile)**Production-grade autonomous trading system for [Polymarket](https://polymarket.com) prediction markets**  <p align="center">> **Production-grade** AI-powered research agent that discovers Polymarket prediction markets, gathers authoritative evidence, generates calibrated probability forecasts, and executes trades with strict risk controls.
+Multi-model AI ensemble forecasting · Autonomous evidence gathering · 15+ risk checks · Whale intelligence · Real-time dashboard
 
 
 
-*Discovers markets · Researches evidence · Forecasts probabilities · Manages risk · Executes trades*
+> ⚠️ **This bot trades real money.** It ships with `dry_run: true` by default. Three independent safety gates must be unlocked before any real order is placed.**Autonomous prediction market trading powered by AI research & multi-model forecasting**# Polymarket AI Research Trading Bot  <h1 align="center">Polymarket AI Research Trading Bot</h1>
 
 
-
-> ⚠️ **Trades real money.** Ships with `dry_run: true` by default. Three safety gates must be unlocked for live trading.*Multi-model AI ensemble forecasting · Autonomous evidence gathering · 15+ risk checks · Whale intelligence · Real-time dashboard*    <strong>Production-grade autonomous trading system for Polymarket prediction markets, powered by multi-model AI ensemble forecasting, real-time evidence gathering, and institutional-grade risk management.</strong>
-
-
-
-</div>
-
-
-
----[![Python 3.9+](https://img.shields.io/badge/python-3.9+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://python.org)  </p>⚠️ **This bot trades real money.** Start with `dry_run: true` (the default) and `paper-trade` commands.
-
-
-
-## 📋 What It Does[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg?style=flat)](LICENSE)
-
-
-
-This bot runs a fully autonomous trading loop on [Polymarket](https://polymarket.com). Every 5 minutes it:[![Docker Ready](https://img.shields.io/badge/docker-ready-2496ED.svg?style=flat&logo=docker&logoColor=white)](Dockerfile)  <p align="center">
-
-
-
-1. **Scans** for active prediction markets via the Polymarket API[![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg?style=flat)](https://github.com/astral-sh/ruff)
-
-2. **Classifies** each market into 11 categories using 100+ pattern rules
-
-3. **Filters** out low-quality markets before wasting API calls (~90% cost savings)    <img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python 3.9+">---
-
-4. **Researches** top candidates using web search against authoritative sources
-
-5. **Extracts** structured evidence (every fact needs a metric, value, date, and citation)---
-
-6. **Forecasts** probabilities using GPT-4o, Claude 3.5, and Gemini 1.5 Pro in parallel
-
-7. **Calibrates** raw forecasts with Platt scaling and historical accuracy data    <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
-
-8. **Calculates edge** over the market price (after fees)
-
-9. **Runs 15+ risk checks** — any single failure blocks the trade> ⚠️ **This bot can trade real money.** It ships with `dry_run: true` by default and requires three independent safety gates to be unlocked before any real order is placed. Always start with paper trading.
-
-10. **Sizes the position** with fractional Kelly criterion
-
-11. **Executes** via TWAP, iceberg, or simple orders with a triple dry-run safety gate    <img src="https://img.shields.io/badge/docker-ready-2496ED.svg" alt="Docker Ready">## Architecture
-
-12. **Monitors** open positions with stop-loss, trailing stops, and hold-to-resolution
-
-</div>
 
 ---
 
-    <img src="https://img.shields.io/badge/status-active-success.svg" alt="Active">
 
-## ✨ Features
 
----
+[Features](#-features) · [Quick Start](#-quick-start) · [CLI Commands](#-cli-commands) · [Configuration](#-configuration) · [Dashboard](#-real-time-dashboard) · [Architecture](#-architecture) · [Deployment](#-deployment) · [Testing](#-testing) · [License](#-license)[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 
-### 🔍 Market Discovery & Classification
 
-  </p>```
 
-- Discovers markets from the **Polymarket Gamma API** with volume, liquidity, and spread filters
+---[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-- **11-category classifier** (MACRO, ELECTION, CORPORATE, LEGAL, TECHNOLOGY, SCIENCE, CRYPTO, REGULATION, GEOPOLITICS, SPORTS, ENTERTAINMENT) — pure regex, no LLM needed## Table of Contents
 
-- Each market gets a **researchability score** (0–100) that determines research budget
 
-- **Pre-research filter** blocks junk markets before expensive API calls</p>┌─────────────────────────────────────────────────────────────────┐
+## 📖 Overview[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](Dockerfile)**Production-grade autonomous trading system for [Polymarket](https://polymarket.com) prediction markets**  <p align="center">> **Production-grade** AI-powered research agent that discovers Polymarket prediction markets, gathers authoritative evidence, generates calibrated probability forecasts, and executes trades with strict risk controls.
 
-- Configurable **research cooldowns** to prevent re-scanning the same market
 
-- [Overview](#overview)
 
-### 📚 Autonomous Research Engine
+A production-grade autonomous trading system for [Polymarket](https://polymarket.com) prediction markets. The bot runs a continuous loop that discovers markets, gathers evidence from authoritative sources, forecasts probabilities using an ensemble of frontier LLMs, applies institutional-grade risk management, and executes trades — all without human intervention.
 
-- [System Architecture](#system-architecture)│                          CLI (Click)                            │
 
-- **Query Builder** generates site-restricted searches per category — `site:bls.gov` for macro, `site:sec.gov` for corporate, `site:fec.gov` for elections
 
-- Includes **contrarian queries** to avoid confirmation bias- [Core Pipeline](#core-pipeline)
+### The 12-Step Pipeline*Discovers markets · Researches evidence · Forecasts probabilities · Manages risk · Executes trades*
 
-- **3 pluggable search backends** — SerpAPI, Bing, Tavily — with automatic fallback
 
-- **Full HTML extraction** via BeautifulSoup (not just search snippets)- [Feature Deep Dive](#feature-deep-dive)---│  scan │ research │ forecast │ paper-trade │ trade               │
 
-- **Domain authority scoring** — primary sources (1.0) > secondary (0.6) > unknown (0.3)
+Every 5 minutes, the bot runs this full cycle:
 
-- **Blocked domains** — auto-filters Wikipedia, Reddit, Medium, Twitter, TikTok, etc.  - [1. Market Discovery & Classification](#1-market-discovery--classification)
 
-- **Source caching** with configurable TTL (default 1 hour)
 
-  - [2. Autonomous Research Engine](#2-autonomous-research-engine)├───────┴──────────┴──────────┴─────────────┴─────────────────────┤
+```> ⚠️ **Trades real money.** Ships with `dry_run: true` by default. Three safety gates must be unlocked for live trading.*Multi-model AI ensemble forecasting · Autonomous evidence gathering · 15+ risk checks · Whale intelligence · Real-time dashboard*    <strong>Production-grade autonomous trading system for Polymarket prediction markets, powered by multi-model AI ensemble forecasting, real-time evidence gathering, and institutional-grade risk management.</strong>
 
-### 🧠 Multi-Model AI Forecasting
+1.  Scan         →  Discover active markets via Polymarket Gamma API
 
-  - [3. Multi-Model AI Forecasting](#3-multi-model-ai-forecasting)
+2.  Classify     →  Categorize into 11 market types using 100+ regex rules
 
-- **Ensemble of 3 frontier LLMs** running in parallel:
+3.  Filter       →  Block low-quality markets before expensive API calls
 
-  - GPT-4o (40% weight) — primary forecaster  - [4. Calibration & Self-Improvement](#4-calibration--self-improvement)## Table of Contents│                                                                 │
+4.  Research     →  Web search against authoritative sources per category</div>
 
-  - Claude 3.5 Sonnet (35% weight) — second opinion
+5.  Extract      →  Pull structured evidence with metrics, dates, citations
 
-  - Gemini 1.5 Pro (25% weight) — third opinion  - [5. Risk Management Framework](#5-risk-management-framework)
+6.  Forecast     →  Run GPT-4o, Claude 3.5, Gemini 1.5 Pro in parallel
 
-- **3 aggregation methods** — trimmed mean, median, or weighted average
+7.  Calibrate    →  Apply Platt scaling + historical accuracy correction
 
-- Models forecast **independently from evidence** — explicitly told not to anchor to market price  - [6. Intelligent Execution Engine](#6-intelligent-execution-engine)│  Connectors        Research           Forecast                  │
+8.  Edge Calc    →  Calculate net edge over market price (after fees)---[![Python 3.9+](https://img.shields.io/badge/python-3.9+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://python.org)  </p>⚠️ **This bot trades real money.** Start with `dry_run: true` (the default) and `paper-trade` commands.
 
-- **Graceful degradation** — if a model fails, the ensemble continues with the rest
+9.  Risk Check   →  Run 15+ independent risk checks (any fail = no trade)
 
-- **Adaptive weighting** — tracks per-model Brier scores by category and reweights over time  - [7. Whale & Smart Money Intelligence](#7-whale--smart-money-intelligence)
+10. Size         →  Fractional Kelly criterion with 7 adjustment multipliers
 
+11. Execute      →  TWAP, iceberg, or simple orders through triple safety gate
 
-
-### 📐 Calibration & Self-Improvement  - [8. Multi-Source Liquid Scanner](#8-multi-source-liquid-scanner)- [Overview](#overview)│  ┌─────────────┐   ┌──────────────┐   ┌──────────────────┐     │
-
-
-
-- **Platt scaling** — logistic compression pulling extreme probabilities toward 0.50  - [9. Market Microstructure Analysis](#9-market-microstructure-analysis)
-
-- **Historical calibration** — learns from past (forecast, outcome) pairs using logistic regression
-
-- **Evidence quality penalty** — weak evidence → forecast pulled toward 0.50  - [10. Real-Time Monitoring Dashboard](#10-real-time-monitoring-dashboard)- [Architecture](#architecture)│  │ Gamma API   │   │ Query Builder│   │ Feature Builder   │     │
-
-- **Contradiction penalty** — conflicting sources → increased uncertainty
-
-- **Ensemble spread penalty** — when models disagree (>10%), adds uncertainty  - [11. Observability & Alerting](#11-observability--alerting)
-
-- **Calibration feedback loop** — retrains calibrator automatically after 30+ resolved markets
-
-- **Brier score tracking** — monitors forecast accuracy over time  - [12. Storage & Audit Trail](#12-storage--audit-trail)- [Core Pipeline](#core-pipeline)│  │ CLOB API    │──▶│ Source Fetch │──▶│ LLM Forecaster   │     │
-
-
-
-### 🛡️ Risk Management (15+ Checks)- [Tech Stack](#tech-stack)
-
-
-
-Every trade must pass ALL of these — one failure = no trade:- [Installation & Setup](#installation--setup)- [Feature Breakdown](#feature-breakdown)│  │ Web Search  │   │ Evidence Ext │   │ Calibrator        │     │
-
-
-
-| Check | Default |- [Configuration Reference](#configuration-reference)
-
-|-------|---------|
-
-| Kill switch (manual emergency halt) | Off |- [CLI Reference](#cli-reference)  - [Market Discovery & Classification](#1-market-discovery--classification)│  └─────────────┘   └──────────────┘   └──────────────────┘     │
-
-| Drawdown auto-kill | 20% max drawdown |
-
-| Drawdown heat (progressive sizing reduction) | 4 levels |- [Deployment](#deployment)
-
-| Max stake per market | $50 |
-
-| Daily loss limit | $500 |- [Testing](#testing)  - [Autonomous Research Engine](#2-autonomous-research-engine)│                                               │                 │
-
-| Max open positions | 25 |
-
-| Minimum net edge (after fees) | 4% |- [Project Structure](#project-structure)
-
-| Minimum liquidity | $2,000 |
-
-| Maximum spread | 6% |- [Safety & Risk Controls](#safety--risk-controls)  - [Multi-Model AI Forecasting](#3-multi-model-ai-forecasting)│  Policy                                       ▼                 │
-
-| Evidence quality threshold | 0.55 |
-
-| Confidence filter | MEDIUM minimum |- [API Cost Estimates](#api-cost-estimates)
-
-| Implied probability floor | 5% |
-
-| Positive edge direction | Must be positive after costs |- [License](#license)  - [Calibration & Self-Improvement](#4-calibration--self-improvement)│  ┌──────────────────────────────────────────────────┐           │
-
-| Market type whitelist/blacklist | Configurable |
-
-| Portfolio category exposure | 35% max per category |
-
-| Timeline endgame check | 48h near resolution |
-
----  - [Risk Management Framework](#5-risk-management-framework)│  │ Edge Calc │ Risk Limits │ Position Sizer          │           │
-
-**Drawdown heat system** — 4 levels that progressively cut position sizes:
-
-- Normal (< 10% drawdown) → full sizing
-
-- Warning (≥ 10%) → half sizing
-
-- Critical (≥ 15%) → quarter sizing## Overview  - [Intelligent Execution](#6-intelligent-execution)│  └──────────────────────────────────────────────────┘           │
-
-- Max (≥ 20%) → all trading halted
-
-
-
-**Portfolio risk** — caps exposure per category, per event, and limits correlated positions.
-
-This system implements a complete, end-to-end autonomous trading pipeline for Polymarket prediction markets. It combines web-scale evidence gathering, multi-model LLM probabilistic forecasting, and institutional-grade risk management into a single, self-contained platform.  - [Whale & Smart Money Intelligence](#7-whale--smart-money-intelligence)│                       │                                         │
-
-**Arbitrage detection** — scans for mispriced complementary/multi-outcome markets.
-
-
-
-### ⚡ Execution Engine
-
-### What It Does — The 12-Step Pipeline  - [Liquid Market Scanner](#8-liquid-market-scanner)│  Execution            ▼              Storage / Observability    │
-
-- **Position sizing** — fractional Kelly criterion with 7 multipliers (confidence, drawdown, timeline, volatility, regime, category, liquidity)
-
-- **Auto strategy selection:**
-
-  - **Simple** — single limit order for small trades
-
-  - **TWAP** — splits large orders into 5 time-weighted slicesEvery trading cycle follows a deterministic pipeline, from market discovery through order execution and continuous monitoring:  - [Real-Time Monitoring Dashboard](#9-real-time-monitoring-dashboard)│  ┌──────────────────────────┐   ┌───────────────────────┐      │
-
-  - **Iceberg** — shows only 20% of true order size
-
-  - **Adaptive pricing** — adjusts based on orderbook depth
-
-- **Triple dry-run safety gate:**
-
-  1. `dry_run` flag on each order object| Step | Stage | Description |  - [Observability & Alerting](#10-observability--alerting)│  │ Order Builder            │   │ SQLite + Migrations   │      │
-
-  2. `execution.dry_run` in config.yaml
-
-  3. `ENABLE_LIVE_TRADING` environment variable|:----:|-------|-------------|
-
-  - All three must be off for a real order to go through
-
-- **Fill tracker** — monitors fill rate, slippage, and time-to-fill per strategy| 1 | **Discover** | Scans active prediction markets via the Polymarket Gamma API with volume, liquidity, and spread filters |- [Tech Stack](#tech-stack)│  │ Order Router (dry/live)  │   │ structlog + Metrics   │      │
-
-- **6 exit strategies** — dynamic stop-loss, trailing stop, hold-to-resolution, time-based exit, edge reversal, kill switch forced exit
-
-| 2 | **Classify** | Categorizes each market into 11 categories (MACRO, ELECTION, CORPORATE, LEGAL, TECHNOLOGY, SCIENCE, CRYPTO, REGULATION, GEOPOLITICS, SPORTS, ENTERTAINMENT) with researchability scoring using 100+ regex rules |
-
-### 🐋 Whale & Smart Money Intelligence
-
-| 3 | **Filter** | Pre-research quality filter blocks low-quality, unresearchable, and recently-scanned markets before expensive API calls (~90% cost reduction) |- [Quick Start](#quick-start)│  │ Cancel Manager           │   │ JSON Reports          │      │
-
-- **Wallet scanner** — tracks top Polymarket traders seeded from the leaderboard
-
-- **Delta detection** — spots new entries, exits, size increases/decreases| 4 | **Research** | Gathers evidence autonomously using site-restricted web searches against authoritative sources (BLS.gov, SEC.gov, FEC.gov, NOAA.gov, etc.) with full HTML content extraction |
-
-- **Conviction scoring** — combines whale count × dollar size into a signal
-
-- **Edge integration** — whales agree with model → +8% edge boost; disagree → -2% penalty| 5 | **Extract** | LLM-powered structured evidence extraction — every fact must include metric name, value, unit, date, source URL, and publisher with authority scoring |- [Configuration](#configuration)│  └──────────────────────────┘   └───────────────────────┘      │
-
-- **Leaderboard seeding** — auto-discovers top 50 wallets by profit + top 50 by volume
-
-| 6 | **Forecast** | Independent probability estimates via a multi-model ensemble (GPT-4o, Claude 3.5 Sonnet, Gemini 1.5 Pro) with trimmed mean/median/weighted aggregation |
-
-### 🔎 Liquid Market Scanner (7-Phase Pipeline)
-
-| 7 | **Calibrate** | Adjusts raw forecasts using Platt scaling, historical logistic regression, evidence quality penalties, contradiction discounts, and ensemble disagreement penalties |- [CLI Reference](#cli-reference)└─────────────────────────────────────────────────────────────────┘
-
-| Phase | What It Does |
-
-|-------|-------------|| 8 | **Edge** | Calculates directional edge over market price with full transaction cost awareness (fees + gas), expected value per dollar, and break-even probability |
-
-| 0 | Seeds top wallets from Polymarket leaderboard |
-
-| 1 | Fetches active markets via Gamma API || 9 | **Risk** | Enforces 15+ independent risk checks — any single violation blocks the trade. Includes kill switch, drawdown heat, daily loss limit, evidence quality gate, portfolio exposure limits, and more |- [Deployment](#deployment)```
-
-| 2 | Scans recent global trades to discover whale addresses |
-
-| 2b | Targets top liquid markets for per-market whale scanning || 10 | **Size** | Positions are sized using fractional Kelly criterion with 7 independent multipliers: confidence, drawdown heat, timeline proximity, volatility, regime, category, and liquidity caps |
-
-| 3 | Ranks discovered addresses by volume and trade size |
-
-| 4 | Deep wallet analysis — full position data for top candidates || 11 | **Execute** | Smart order routing with automatic strategy selection (Simple, TWAP, Iceberg, Adaptive Pricing) and triple dry-run safety gate |- [Project Structure](#project-structure)
-
-| 5 | Scores and saves whale data to database |
-
-| 12 | **Monitor** | Continuous position monitoring with dynamic stop-loss, trailing stops, edge reversal exits, time-based exits, and hold-to-resolution strategy |
-
-**API Pool** — rotates requests across multiple endpoints with independent rate limiters:
-
-- 3 strategies: round-robin, least-loaded, weighted-random- [Safety & Risk Controls](#safety--risk-controls)## Key Features
-
-- Auto-disables unhealthy endpoints, auto-recovers after cooldown
-
-- Add custom proxy endpoints via config to multiply throughput---
-
-
-
-### 📊 Market Microstructure- [License](#license)
-
-
-
-- **Order flow imbalance** across 60min / 4hr / 24hr windows## System Architecture
-
-- **VWAP divergence** — enter when price is below volume-weighted average
-
-- **Whale order detection** — flags individual trades > $2,000| Feature | Details |
-
-- **Trade acceleration** — detects unusual activity surges (>2× baseline)
-
-- **Book depth ratio** — bid vs. ask pressure```
-
-- **Smart entry calculator** — combines all signals to find optimal entry price
-
-┌──────────────────────────────────────────────────────────────────────────────────┐---|---|---|
-
-### 📺 Real-Time Dashboard
-
-│                           MONITORING DASHBOARD (Flask :2345)                     │
-
-9-tab Flask dashboard with glassmorphism dark theme on port `2345`:
-
-│    9 Tabs: Overview │ Engine │ Positions │ Forecasts │ Risk │ Whales │ ...       │| **Market Discovery** | Gamma API scanning with volume/liquidity filters |
-
-| Tab | What's There |
-
-|-----|-------------|├──────────────────────────────────────────────────────────────────────────────────┤
-
-| **Overview** | Engine status, cycle count, P&L, equity curve |
-
-| **Trading Engine** | Start/stop controls, cycle history, pipeline visualization |│                                                                                  │## Overview| **Market Classification** | Auto-classifies into MACRO, ELECTION, CORPORATE, WEATHER, SPORTS |
-
-| **Positions** | Open positions with live P&L, closed trade history |
-
-| **Forecasts** | Evidence breakdown, model vs. market probability, reasoning |│  ┌──────────────────┐   ┌────────────────────┐   ┌───────────────────────────┐   │
-
-| **Risk & Drawdown** | Drawdown gauge, heat level, Kelly multiplier, exposure breakdown |
-
-| **Smart Money** | Tracked wallets, conviction signals, whale activity feed |│  │    CONNECTORS     │   │      RESEARCH      │   │        FORECAST           │   │| **Source Whitelisting** | Primary domains per market type (bls.gov, sec.gov, etc.) |
-
-| **Liquid Scanner** | 7-phase pipeline status, discovered candidates, API pool health |
-
-| **Performance** | Win rate, ROI, Sharpe, category breakdown, model accuracy |│  │                   │   │                    │   │                           │   │
-
-| **Settings** | Environment status, config viewer, kill switch toggle |
-
-│  │  Gamma API        │   │  Query Builder     │   │  Feature Builder (30+)    │   │This bot implements a complete, end-to-end autonomous trading pipeline for [Polymarket](https://polymarket.com) prediction markets. It combines web-scale evidence gathering, multi-model LLM probabilistic forecasting, and institutional-grade risk management into a single, self-contained system.| **Blocked Domains** | wikipedia.org, reddit.com, medium.com, twitter.com, etc. |
-
-- Protected by `DASHBOARD_API_KEY`
-
-- Config hot-reloads without restart│  │  CLOB API         │──▶│  Source Fetcher    │──▶│  LLM Forecaster           │   │
-
-- Auto-refreshing with live status indicators
-
-│  │  Data API         │   │  Evidence Extract  │   │  Multi-Model Ensemble     │   │| **Evidence Extraction** | LLM-powered: metric_name, value, unit, date per bullet |
-
-### 📡 Observability & Alerting
-
-│  │  Web Search       │   │  Quality Scoring   │   │  (GPT-4o/Claude/Gemini)   │   │
-
-- **structlog** JSON logging with automatic sensitive data redaction
-
-- **Multi-channel alerts** — Telegram, Discord, Slack (with cooldowns)│  │  WebSocket Feed   │   └────────────────────┘   │  Calibrator               │   │### What It Does| **Calibrated Forecasts** | Platt-like logistic shrinkage + evidence quality penalties |
-
-- **Alert triggers** — trades, drawdown warnings, kill switch, errors, daily summaries
-
-- **Sentry integration** — optional error tracking with data scrubbing│  │  API Pool         │                            └───────────────────────────┘   │
-
-- **API cost tracking** — per-call cost estimation for LLM and search usage
-
-- **JSON run reports** — exportable reports saved to `reports/`│  │  Rate Limiter     │                                        │                   │| **Risk Controls** | 9 independent checks, kill switch, daily loss limits |
-
-
-
-### 💾 Storage & Audit│  └──────────────────┘                                         ▼                   │
-
-
-
-- **SQLite with WAL mode** — concurrent reads/writes, 10 auto-migrations│                         ┌──────────────────────────────────────────────────────┐   │1. **Discovers** active prediction markets via the Polymarket Gamma API| **Position Sizing** | Fractional Kelly criterion with confidence scaling |
-
-- **Immutable audit trail** — every decision recorded with SHA-256 integrity checksums
-
-- **TTL cache** — search (1hr), orderbook (30s), LLM (30min), market list (5min)│                         │                     POLICY                           │   │
-
-- **Auto backup** — SQLite backup with rotation (max 10), triggered via `make backup`
-
-│                         │                                                      │   │2. **Classifies** each market into 11 categories with researchability scoring| **Execution Safety** | Triple dry-run gate: order, config, env var |
-
----
-
-│                         │  Edge Calculator │ Risk Limits (15+ checks)          │   │
-
-## 🚀 Quick Start
-
-│                         │  Position Sizer (Kelly) │ Drawdown Manager (4 heat)  │   │3. **Researches** markets autonomously using site-restricted web searches against authoritative sources| **Observability** | structlog JSON logging, metrics, run reports |
-
-```bash
-
-# Clone & install│                         │  Portfolio Risk │ Arbitrage │ Timeline Intelligence   │   │
-
-git clone https://github.com/dylanpersonguy/polymarket-ai-trading-bot.git
-
-cd polymarket-ai-trading-bot│                         └──────────────────────────────────────────────────────┘   │4. **Extracts** structured evidence (metrics, dates, citations) using LLM-powered analysis
-
-python3 -m venv .venv && source .venv/bin/activate
-
-pip install -e ".[dev]"│                                               │                                   │
-
-
-
-# Configure│  ┌──────────────────┐                         ▼            ┌──────────────────┐   │5. **Forecasts** independent probability estimates via a multi-model ensemble (GPT-4o, Claude 3.5, Gemini 1.5 Pro)---
-
-cp .env.example .env
-
-# Edit .env → add OPENAI_API_KEY and SERPAPI_KEY at minimum│  │    ANALYTICS      │   ┌──────────────────────────────┐  │     STORAGE      │   │
-
-
-
-# Launch dashboard│  │                   │   │         EXECUTION             │  │                  │   │6. **Calibrates** raw forecasts using Platt scaling, historical calibration, and evidence quality adjustments
-
-make dashboard
-
-# Open http://localhost:2345│  │  Regime Detector  │   │                               │  │  SQLite + WAL    │   │
+12. Monitor      →  Stop-loss, trailing stops, hold-to-resolution## 📋 What It Does[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg?style=flat)](LICENSE)
 
 ```
 
+
+
+---
+
+This bot runs a fully autonomous trading loop on [Polymarket](https://polymarket.com). Every 5 minutes it:[![Docker Ready](https://img.shields.io/badge/docker-ready-2496ED.svg?style=flat&logo=docker&logoColor=white)](Dockerfile)  <p align="center">
+
+## ✨ Features
+
+
+
+### 🔍 Market Discovery & Classification
+
+1. **Scans** for active prediction markets via the Polymarket API[![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg?style=flat)](https://github.com/astral-sh/ruff)
+
+- Discovers markets from the **Polymarket Gamma API** with volume, liquidity, and spread filters
+
+- **11-category classifier** — MACRO, ELECTION, CORPORATE, LEGAL, TECHNOLOGY, SCIENCE, CRYPTO, REGULATION, GEOPOLITICS, SPORTS, ENTERTAINMENT2. **Classifies** each market into 11 categories using 100+ pattern rules
+
+- Pure regex classification — 100+ pattern rules, no LLM cost
+
+- Each market gets a **researchability score** (0–100) that determines research budget3. **Filters** out low-quality markets before wasting API calls (~90% cost savings)    <img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python 3.9+">---
+
+- Pre-research filter blocks junk markets before expensive API calls (~90% cost savings)
+
+- Configurable research cooldowns to prevent re-scanning the same market4. **Researches** top candidates using web search against authoritative sources
+
+
+
+### 📚 Autonomous Research Engine5. **Extracts** structured evidence (every fact needs a metric, value, date, and citation)---
+
+
+
+- **Query Builder** generates site-restricted searches per category:6. **Forecasts** probabilities using GPT-4o, Claude 3.5, and Gemini 1.5 Pro in parallel
+
+  - `site:bls.gov` for macro, `site:sec.gov` for corporate, `site:fec.gov` for elections
+
+- Includes **contrarian queries** to avoid confirmation bias7. **Calibrates** raw forecasts with Platt scaling and historical accuracy data    <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
+
+- **3 pluggable search backends** — SerpAPI, Bing, Tavily — with automatic fallback chain
+
+- **Full HTML extraction** via BeautifulSoup (not just search snippets)8. **Calculates edge** over the market price (after fees)
+
+- **Domain authority scoring** — primary sources (1.0) > secondary (0.6) > unknown (0.3)
+
+- Auto-filters low-quality domains (Wikipedia, Reddit, Medium, Twitter, TikTok)9. **Runs 15+ risk checks** — any single failure blocks the trade> ⚠️ **This bot can trade real money.** It ships with `dry_run: true` by default and requires three independent safety gates to be unlocked before any real order is placed. Always start with paper trading.
+
+- Source caching with configurable TTL (default 1 hour)
+
+10. **Sizes the position** with fractional Kelly criterion
+
+### 🧠 Multi-Model AI Forecasting
+
+11. **Executes** via TWAP, iceberg, or simple orders with a triple dry-run safety gate    <img src="https://img.shields.io/badge/docker-ready-2496ED.svg" alt="Docker Ready">## Architecture
+
+- **Ensemble of 3 frontier LLMs** running in parallel:
+
+  - GPT-4o (40% weight) — primary forecaster12. **Monitors** open positions with stop-loss, trailing stops, and hold-to-resolution
+
+  - Claude 3.5 Sonnet (35% weight) — second opinion
+
+  - Gemini 1.5 Pro (25% weight) — third opinion</div>
+
+- **3 aggregation methods** — trimmed mean, median, or weighted average
+
+- Models forecast independently from evidence — explicitly told not to anchor to market price---
+
+- **Graceful degradation** — if a model fails, the ensemble continues with the rest
+
+- **Adaptive weighting** — tracks per-model Brier scores by category and reweights over time    <img src="https://img.shields.io/badge/status-active-success.svg" alt="Active">
+
+
+
+### 📐 Calibration & Self-Improvement## ✨ Features
+
+
+
+- **Platt scaling** — logistic compression pulling extreme probabilities toward 0.50---
+
+- **Historical calibration** — learns from past (forecast, outcome) pairs via logistic regression
+
+- **Evidence quality penalty** — weak evidence → forecast pulled toward 0.50### 🔍 Market Discovery & Classification
+
+- **Contradiction penalty** — conflicting sources → increased uncertainty
+
+- **Ensemble spread penalty** — when models disagree (>10%), adds uncertainty  </p>```
+
+- **Calibration feedback loop** — retrains automatically after 30+ resolved markets
+
+- **Brier score tracking** — monitors forecast accuracy over time- Discovers markets from the **Polymarket Gamma API** with volume, liquidity, and spread filters
+
+
+
+### 🛡️ Risk Management (15+ Checks)- **11-category classifier** (MACRO, ELECTION, CORPORATE, LEGAL, TECHNOLOGY, SCIENCE, CRYPTO, REGULATION, GEOPOLITICS, SPORTS, ENTERTAINMENT) — pure regex, no LLM needed## Table of Contents
+
+
+
+Every trade must pass ALL of these — one failure blocks the trade:- Each market gets a **researchability score** (0–100) that determines research budget
+
+
+
+- **Kill switch** — manual emergency halt- **Pre-research filter** blocks junk markets before expensive API calls</p>┌─────────────────────────────────────────────────────────────────┐
+
+- **Drawdown auto-kill** — 20% max drawdown
+
+- **Drawdown heat system** — 4 levels that progressively cut position sizes:- Configurable **research cooldowns** to prevent re-scanning the same market
+
+  - Normal (< 10%) → full sizing
+
+  - Warning (≥ 10%) → half sizing- [Overview](#overview)
+
+  - Critical (≥ 15%) → quarter sizing
+
+  - Max (≥ 20%) → all trading halted### 📚 Autonomous Research Engine
+
+- **Max stake per market** — $50 default
+
+- **Daily loss limit** — $500 default- [System Architecture](#system-architecture)│                          CLI (Click)                            │
+
+- **Max open positions** — 25
+
+- **Minimum net edge** — 4% after fees- **Query Builder** generates site-restricted searches per category — `site:bls.gov` for macro, `site:sec.gov` for corporate, `site:fec.gov` for elections
+
+- **Minimum liquidity** — $2,000
+
+- **Maximum spread** — 6%- Includes **contrarian queries** to avoid confirmation bias- [Core Pipeline](#core-pipeline)
+
+- **Evidence quality threshold** — 0.55
+
+- **Confidence filter** — MEDIUM minimum- **3 pluggable search backends** — SerpAPI, Bing, Tavily — with automatic fallback
+
+- **Implied probability floor** — 5%
+
+- **Positive edge direction** — must be positive after costs- **Full HTML extraction** via BeautifulSoup (not just search snippets)- [Feature Deep Dive](#feature-deep-dive)---│  scan │ research │ forecast │ paper-trade │ trade               │
+
+- **Market type whitelist/blacklist** — configurable
+
+- **Portfolio category exposure** — 35% max per category- **Domain authority scoring** — primary sources (1.0) > secondary (0.6) > unknown (0.3)
+
+- **Timeline endgame check** — 48h near resolution
+
+- **Blocked domains** — auto-filters Wikipedia, Reddit, Medium, Twitter, TikTok, etc.  - [1. Market Discovery & Classification](#1-market-discovery--classification)
+
+**Portfolio risk** — caps exposure per category, per event, and limits correlated positions.
+
+- **Source caching** with configurable TTL (default 1 hour)
+
+**Arbitrage detection** — scans for mispriced complementary/multi-outcome markets.
+
+  - [2. Autonomous Research Engine](#2-autonomous-research-engine)├───────┴──────────┴──────────┴─────────────┴─────────────────────┤
+
+### ⚡ Execution Engine
+
+### 🧠 Multi-Model AI Forecasting
+
+- **Position sizing** — fractional Kelly criterion with 7 multipliers (confidence, drawdown, timeline, volatility, regime, category, liquidity)
+
+- **Auto strategy selection:**  - [3. Multi-Model AI Forecasting](#3-multi-model-ai-forecasting)
+
+  - Simple — single limit order for small trades
+
+  - TWAP — splits large orders into 5 time-weighted slices- **Ensemble of 3 frontier LLMs** running in parallel:
+
+  - Iceberg — shows only 20% of true order size
+
+  - Adaptive — adjusts pricing based on orderbook depth  - GPT-4o (40% weight) — primary forecaster  - [4. Calibration & Self-Improvement](#4-calibration--self-improvement)## Table of Contents│                                                                 │
+
+- **Triple dry-run safety gate:**
+
+  - `dry_run` flag on each order object  - Claude 3.5 Sonnet (35% weight) — second opinion
+
+  - `execution.dry_run` in config.yaml
+
+  - `ENABLE_LIVE_TRADING` environment variable  - Gemini 1.5 Pro (25% weight) — third opinion  - [5. Risk Management Framework](#5-risk-management-framework)
+
+  - All three must allow it for a real order to go through
+
+- **Fill tracker** — monitors fill rate, slippage, and time-to-fill per strategy- **3 aggregation methods** — trimmed mean, median, or weighted average
+
+- **6 exit strategies** — dynamic stop-loss, trailing stop, hold-to-resolution, time-based exit, edge reversal, kill switch forced exit
+
+- Models forecast **independently from evidence** — explicitly told not to anchor to market price  - [6. Intelligent Execution Engine](#6-intelligent-execution-engine)│  Connectors        Research           Forecast                  │
+
+### 🐋 Whale & Smart Money Intelligence
+
+- **Graceful degradation** — if a model fails, the ensemble continues with the rest
+
+- **Wallet scanner** — tracks top Polymarket traders seeded from the leaderboard
+
+- **Delta detection** — spots new entries, exits, size increases/decreases- **Adaptive weighting** — tracks per-model Brier scores by category and reweights over time  - [7. Whale & Smart Money Intelligence](#7-whale--smart-money-intelligence)
+
+- **Conviction scoring** — combines whale count × dollar size into a signal
+
+- **Edge integration** — whales agree with model → +8% edge boost; disagree → -2% penalty
+
+- **Leaderboard seeding** — auto-discovers top 50 wallets by profit + top 50 by volume
+
+### 📐 Calibration & Self-Improvement  - [8. Multi-Source Liquid Scanner](#8-multi-source-liquid-scanner)- [Overview](#overview)│  ┌─────────────┐   ┌──────────────┐   ┌──────────────────┐     │
+
+### 🔎 Liquid Market Scanner (7-Phase Pipeline)
+
+
+
+- **Phase 0** — Seeds top wallets from Polymarket leaderboard
+
+- **Phase 1** — Fetches active markets via Gamma API- **Platt scaling** — logistic compression pulling extreme probabilities toward 0.50  - [9. Market Microstructure Analysis](#9-market-microstructure-analysis)
+
+- **Phase 2** — Scans recent global trades to discover whale addresses
+
+- **Phase 2b** — Targets top liquid markets for per-market whale scanning- **Historical calibration** — learns from past (forecast, outcome) pairs using logistic regression
+
+- **Phase 3** — Ranks discovered addresses by volume and trade size
+
+- **Phase 4** — Deep wallet analysis (full position data for top candidates)- **Evidence quality penalty** — weak evidence → forecast pulled toward 0.50  - [10. Real-Time Monitoring Dashboard](#10-real-time-monitoring-dashboard)- [Architecture](#architecture)│  │ Gamma API   │   │ Query Builder│   │ Feature Builder   │     │
+
+- **Phase 5** — Scores and saves whale data to database
+
+- **Contradiction penalty** — conflicting sources → increased uncertainty
+
+**API Pool** — rotates requests across multiple endpoints with independent rate limiters:
+
+- 3 strategies: round-robin, least-loaded, weighted-random- **Ensemble spread penalty** — when models disagree (>10%), adds uncertainty  - [11. Observability & Alerting](#11-observability--alerting)
+
+- Auto-disables unhealthy endpoints, auto-recovers after cooldown
+
+- Add custom proxy endpoints via config to multiply throughput- **Calibration feedback loop** — retrains calibrator automatically after 30+ resolved markets
+
+
+
+### 📊 Market Microstructure- **Brier score tracking** — monitors forecast accuracy over time  - [12. Storage & Audit Trail](#12-storage--audit-trail)- [Core Pipeline](#core-pipeline)│  │ CLOB API    │──▶│ Source Fetch │──▶│ LLM Forecaster   │     │
+
+
+
+- **Order flow imbalance** across 60min / 4hr / 24hr windows
+
+- **VWAP divergence** — enter when price is below volume-weighted average
+
+- **Whale order detection** — flags individual trades > $2,000### 🛡️ Risk Management (15+ Checks)- [Tech Stack](#tech-stack)
+
+- **Trade acceleration** — detects unusual activity surges (>2× baseline)
+
+- **Book depth ratio** — bid vs. ask pressure
+
+- **Smart entry calculator** — combines all signals to find optimal entry price
+
+Every trade must pass ALL of these — one failure = no trade:- [Installation & Setup](#installation--setup)- [Feature Breakdown](#feature-breakdown)│  │ Web Search  │   │ Evidence Ext │   │ Calibrator        │     │
+
+### 📺 Real-Time Dashboard
+
+
+
+9-tab Flask dashboard with glassmorphism dark theme on port `2345`:
+
+| Check | Default |- [Configuration Reference](#configuration-reference)
+
+- **Overview** — Engine status, cycle count, P&L, equity curve
+
+- **Trading Engine** — Start/stop controls, cycle history, pipeline visualization|-------|---------|
+
+- **Positions** — Open positions with live P&L, closed trade history
+
+- **Forecasts** — Evidence breakdown, model vs. market probability, reasoning| Kill switch (manual emergency halt) | Off |- [CLI Reference](#cli-reference)  - [Market Discovery & Classification](#1-market-discovery--classification)│  └─────────────┘   └──────────────┘   └──────────────────┘     │
+
+- **Risk & Drawdown** — Drawdown gauge, heat level, Kelly multiplier, exposure breakdown
+
+- **Smart Money** — Tracked wallets, conviction signals, whale activity feed| Drawdown auto-kill | 20% max drawdown |
+
+- **Liquid Scanner** — 7-phase pipeline status, discovered candidates, API pool health
+
+- **Performance** — Win rate, ROI, Sharpe, category breakdown, model accuracy| Drawdown heat (progressive sizing reduction) | 4 levels |- [Deployment](#deployment)
+
+- **Settings** — Environment status, config viewer, kill switch toggle
+
+| Max stake per market | $50 |
+
+Protected by `DASHBOARD_API_KEY`. Config hot-reloads without restart. Auto-refreshing with live status indicators.
+
+| Daily loss limit | $500 |- [Testing](#testing)  - [Autonomous Research Engine](#2-autonomous-research-engine)│                                               │                 │
+
+### 📡 Observability & Alerting
+
+| Max open positions | 25 |
+
+- **structlog** JSON logging with automatic sensitive data redaction
+
+- **Multi-channel alerts** — Telegram, Discord, Slack (with cooldowns)| Minimum net edge (after fees) | 4% |- [Project Structure](#project-structure)
+
+- **Alert triggers** — trades, drawdown warnings, kill switch, errors, daily summaries
+
+- **Sentry integration** — optional error tracking with data scrubbing| Minimum liquidity | $2,000 |
+
+- **API cost tracking** — per-call cost estimation for LLM and search usage
+
+- **JSON run reports** — exportable reports saved to `reports/`| Maximum spread | 6% |- [Safety & Risk Controls](#safety--risk-controls)  - [Multi-Model AI Forecasting](#3-multi-model-ai-forecasting)│  Policy                                       ▼                 │
+
+
+
+### 💾 Storage & Audit| Evidence quality threshold | 0.55 |
+
+
+
+- **SQLite with WAL mode** — concurrent reads/writes, 10 auto-migrations| Confidence filter | MEDIUM minimum |- [API Cost Estimates](#api-cost-estimates)
+
+- **Immutable audit trail** — every decision recorded with SHA-256 integrity checksums
+
+- **TTL cache** — search (1hr), orderbook (30s), LLM (30min), market list (5min)| Implied probability floor | 5% |
+
+- **Auto backup** — SQLite backup with rotation (max 10), triggered via `make backup`
+
+| Positive edge direction | Must be positive after costs |- [License](#license)  - [Calibration & Self-Improvement](#4-calibration--self-improvement)│  ┌──────────────────────────────────────────────────┐           │
+
+---
+
+| Market type whitelist/blacklist | Configurable |
+
+## 🚀 Quick Start
+
+| Portfolio category exposure | 35% max per category |
+
+### Prerequisites
+
+| Timeline endgame check | 48h near resolution |
+
+- Python 3.9+
+
+- Git---  - [Risk Management Framework](#5-risk-management-framework)│  │ Edge Calc │ Risk Limits │ Position Sizer          │           │
+
+
+
+### Installation**Drawdown heat system** — 4 levels that progressively cut position sizes:
+
+
+
+```bash- Normal (< 10% drawdown) → full sizing
+
+# Clone the repository
+
+git clone https://github.com/dylanpersonguy/polymarket-ai-trading-bot.git- Warning (≥ 10%) → half sizing
+
+cd polymarket-ai-trading-bot
+
+- Critical (≥ 15%) → quarter sizing## Overview  - [Intelligent Execution](#6-intelligent-execution)│  └──────────────────────────────────────────────────┘           │
+
+# Create virtual environment
+
+python3 -m venv .venv- Max (≥ 20%) → all trading halted
+
+source .venv/bin/activate
+
+
+
+# Install
+
+pip install -e ".[dev]"**Portfolio risk** — caps exposure per category, per event, and limits correlated positions.
+
+```
+
+This system implements a complete, end-to-end autonomous trading pipeline for Polymarket prediction markets. It combines web-scale evidence gathering, multi-model LLM probabilistic forecasting, and institutional-grade risk management into a single, self-contained platform.  - [Whale & Smart Money Intelligence](#7-whale--smart-money-intelligence)│                       │                                         │
+
+### Configure
+
+**Arbitrage detection** — scans for mispriced complementary/multi-outcome markets.
+
+```bash
+
+# Copy environment template
+
+cp .env.example .env
+
+### ⚡ Execution Engine
+
+# Edit .env and add your API keys (at minimum OPENAI_API_KEY and SERPAPI_KEY)
+
+```### What It Does — The 12-Step Pipeline  - [Liquid Market Scanner](#8-liquid-market-scanner)│  Execution            ▼              Storage / Observability    │
+
+
+
+### Launch- **Position sizing** — fractional Kelly criterion with 7 multipliers (confidence, drawdown, timeline, volatility, regime, category, liquidity)
+
+
+
+```bash- **Auto strategy selection:**
+
+# Start the dashboard (paper trading, safe by default)
+
+make dashboard  - **Simple** — single limit order for small trades
+
+
+
+# Dashboard available at http://localhost:2345  - **TWAP** — splits large orders into 5 time-weighted slicesEvery trading cycle follows a deterministic pipeline, from market discovery through order execution and continuous monitoring:  - [Real-Time Monitoring Dashboard](#9-real-time-monitoring-dashboard)│  ┌──────────────────────────┐   ┌───────────────────────┐      │
+
+```
+
+  - **Iceberg** — shows only 20% of true order size
+
+### Verify It's Working
+
+  - **Adaptive pricing** — adjusts based on orderbook depth
+
+```bash
+
+# Scan for markets- **Triple dry-run safety gate:**
+
+bot scan --limit 20
+
+  1. `dry_run` flag on each order object| Step | Stage | Description |  - [Observability & Alerting](#10-observability--alerting)│  │ Order Builder            │   │ SQLite + Migrations   │      │
+
+# Research a specific market
+
+bot research --market <MARKET_ID>  2. `execution.dry_run` in config.yaml
+
+
+
+# Run a full forecast pipeline  3. `ENABLE_LIVE_TRADING` environment variable|:----:|-------|-------------|
+
+bot forecast --market <MARKET_ID>
+
+```  - All three must be off for a real order to go through
+
+
+
+### Docker- **Fill tracker** — monitors fill rate, slippage, and time-to-fill per strategy| 1 | **Discover** | Scans active prediction markets via the Polymarket Gamma API with volume, liquidity, and spread filters |- [Tech Stack](#tech-stack)│  │ Order Router (dry/live)  │   │ structlog + Metrics   │      │
+
+
+
+```bash- **6 exit strategies** — dynamic stop-loss, trailing stop, hold-to-resolution, time-based exit, edge reversal, kill switch forced exit
+
+cp .env.example .env   # add your API keys
+
+docker compose up -d| 2 | **Classify** | Categorizes each market into 11 categories (MACRO, ELECTION, CORPORATE, LEGAL, TECHNOLOGY, SCIENCE, CRYPTO, REGULATION, GEOPOLITICS, SPORTS, ENTERTAINMENT) with researchability scoring using 100+ regex rules |
+
+# Dashboard at http://localhost:2345
+
+```### 🐋 Whale & Smart Money Intelligence
+
+
+
+---| 3 | **Filter** | Pre-research quality filter blocks low-quality, unresearchable, and recently-scanned markets before expensive API calls (~90% cost reduction) |- [Quick Start](#quick-start)│  │ Cancel Manager           │   │ JSON Reports          │      │
+
+
+
+## 🛠️ CLI Commands- **Wallet scanner** — tracks top Polymarket traders seeded from the leaderboard
+
+
+
+```bash- **Delta detection** — spots new entries, exits, size increases/decreases| 4 | **Research** | Gathers evidence autonomously using site-restricted web searches against authoritative sources (BLS.gov, SEC.gov, FEC.gov, NOAA.gov, etc.) with full HTML content extraction |
+
+bot scan --limit 20              # Discover active markets
+
+bot research --market <ID>       # Research a specific market- **Conviction scoring** — combines whale count × dollar size into a signal
+
+bot forecast --market <ID>       # Full pipeline: research → forecast → risk → size
+
+bot paper-trade --market <ID>    # Simulated trade (always dry run)- **Edge integration** — whales agree with model → +8% edge boost; disagree → -2% penalty| 5 | **Extract** | LLM-powered structured evidence extraction — every fact must include metric name, value, unit, date, source URL, and publisher with authority scoring |- [Configuration](#configuration)│  └──────────────────────────┘   └───────────────────────┘      │
+
+bot trade --market <ID>          # Live trade (requires ENABLE_LIVE_TRADING=true)
+
+bot engine start                 # Start continuous trading loop- **Leaderboard seeding** — auto-discovers top 50 wallets by profit + top 50 by volume
+
+bot engine status                # Show engine health
+
+bot dashboard                    # Launch web dashboard| 6 | **Forecast** | Independent probability estimates via a multi-model ensemble (GPT-4o, Claude 3.5 Sonnet, Gemini 1.5 Pro) with trimmed mean/median/weighted aggregation |
+
+bot portfolio                    # Portfolio risk report
+
+bot drawdown                     # Current drawdown state### 🔎 Liquid Market Scanner (7-Phase Pipeline)
+
+bot arbitrage                    # Scan for arbitrage
+
+bot alerts                       # Recent alert history| 7 | **Calibrate** | Adjusts raw forecasts using Platt scaling, historical logistic regression, evidence quality penalties, contradiction discounts, and ensemble disagreement penalties |- [CLI Reference](#cli-reference)└─────────────────────────────────────────────────────────────────┘
+
+```
+
+| Phase | What It Does |
+
+---
+
+|-------|-------------|| 8 | **Edge** | Calculates directional edge over market price with full transaction cost awareness (fees + gas), expected value per dollar, and break-even probability |
+
+## ⚙️ Configuration
+
+| 0 | Seeds top wallets from Polymarket leaderboard |
+
+All configuration lives in `config.yaml` and `.env`. Here are the key environment variables:
+
+| 1 | Fetches active markets via Gamma API || 9 | **Risk** | Enforces 15+ independent risk checks — any single violation blocks the trade. Includes kill switch, drawdown heat, daily loss limit, evidence quality gate, portfolio exposure limits, and more |- [Deployment](#deployment)```
+
+### Required
+
+| 2 | Scans recent global trades to discover whale addresses |
+
+- `OPENAI_API_KEY` — GPT-4o forecasting & evidence extraction
+
+- `SERPAPI_KEY` — Web search for research| 2b | Targets top liquid markets for per-market whale scanning || 10 | **Size** | Positions are sized using fractional Kelly criterion with 7 independent multipliers: confidence, drawdown heat, timeline proximity, volatility, regime, category, and liquidity caps |
+
+
+
+### Optional (Ensemble & Search)| 3 | Ranks discovered addresses by volume and trade size |
+
+
+
+- `ANTHROPIC_API_KEY` — Claude for ensemble forecasting| 4 | Deep wallet analysis — full position data for top candidates || 11 | **Execute** | Smart order routing with automatic strategy selection (Simple, TWAP, Iceberg, Adaptive Pricing) and triple dry-run safety gate |- [Project Structure](#project-structure)
+
+- `GOOGLE_API_KEY` — Gemini for ensemble forecasting
+
+- `BING_API_KEY` — Fallback search backend| 5 | Scores and saves whale data to database |
+
+- `TAVILY_API_KEY` — Fallback search backend
+
+| 12 | **Monitor** | Continuous position monitoring with dynamic stop-loss, trailing stops, edge reversal exits, time-based exits, and hold-to-resolution strategy |
+
+### Dashboard & Alerts
+
+**API Pool** — rotates requests across multiple endpoints with independent rate limiters:
+
+- `DASHBOARD_API_KEY` — Dashboard authentication
+
+- `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` — Telegram alerts- 3 strategies: round-robin, least-loaded, weighted-random- [Safety & Risk Controls](#safety--risk-controls)## Key Features
+
+- `DISCORD_WEBHOOK_URL` — Discord alerts
+
+- `SLACK_WEBHOOK_URL` — Slack alerts- Auto-disables unhealthy endpoints, auto-recovers after cooldown
+
+- `SENTRY_DSN` — Error tracking
+
+- Add custom proxy endpoints via config to multiply throughput---
+
+### Live Trading (All Required for Real Orders)
+
+
+
+- `POLYMARKET_API_KEY` — CLOB API credentials
+
+- `POLYMARKET_API_SECRET` — CLOB API secret### 📊 Market Microstructure- [License](#license)
+
+- `POLYMARKET_API_PASSPHRASE` — CLOB passphrase
+
+- `POLYMARKET_PRIVATE_KEY` — Polygon wallet key for signing
+
+- `ENABLE_LIVE_TRADING=true` — Must be explicitly set
+
+- **Order flow imbalance** across 60min / 4hr / 24hr windows## System Architecture
+
+### Enabling Live Trading
+
+- **VWAP divergence** — enter when price is below volume-weighted average
+
+```bash
+
+# Live trading requires explicit opt-in via environment variable- **Whale order detection** — flags individual trades > $2,000| Feature | Details |
+
+ENABLE_LIVE_TRADING=true bot engine start
+
+```- **Trade acceleration** — detects unusual activity surges (>2× baseline)
+
+
+
+> ⚠️ **Warning:** LIVE mode executes real trades with real funds. Start with `paper-trade` commands to validate your setup first.- **Book depth ratio** — bid vs. ask pressure```
+
+
+
+---- **Smart entry calculator** — combines all signals to find optimal entry price
+
+
+
+## 📺 Real-Time Dashboard┌──────────────────────────────────────────────────────────────────────────────────┐---|---|---|
+
+
+
+The dashboard is served at `http://localhost:2345` with 9 tabs:### 📺 Real-Time Dashboard
+
+
+
+- 📈 **Overview** — Engine status, total P&L, equity curve│                           MONITORING DASHBOARD (Flask :2345)                     │
+
+- ⚙️ **Trading Engine** — Start/stop, cycle history, pipeline view
+
+- 💼 **Positions** — Open + closed positions with P&L9-tab Flask dashboard with glassmorphism dark theme on port `2345`:
+
+- 🧠 **Forecasts** — Model outputs, evidence, reasoning
+
+- 🛡️ **Risk** — Drawdown gauge, heat level, exposure│    9 Tabs: Overview │ Engine │ Positions │ Forecasts │ Risk │ Whales │ ...       │| **Market Discovery** | Gamma API scanning with volume/liquidity filters |
+
+- 🐋 **Smart Money** — Whale wallets, conviction signals
+
+- 🔍 **Scanner** — 7-phase pipeline, API pool health| Tab | What's There |
+
+- 📊 **Performance** — Win rate, Sharpe, Sortino, Calmar
+
+- ⚙️ **Settings** — Config viewer, kill switch|-----|-------------|├──────────────────────────────────────────────────────────────────────────────────┤
+
+
+
+Protected by API key. Auto-refreshing. Glassmorphism dark theme.| **Overview** | Engine status, cycle count, P&L, equity curve |
+
+
+
+---| **Trading Engine** | Start/stop controls, cycle history, pipeline visualization |│                                                                                  │## Overview| **Market Classification** | Auto-classifies into MACRO, ELECTION, CORPORATE, WEATHER, SPORTS |
+
+
+
+## 🏗️ Architecture| **Positions** | Open positions with live P&L, closed trade history |
+
+
+
+```| **Forecasts** | Evidence breakdown, model vs. market probability, reasoning |│  ┌──────────────────┐   ┌────────────────────┐   ┌───────────────────────────┐   │
+
+src/
+
+├── cli.py                    # Click CLI (12 commands)| **Risk & Drawdown** | Drawdown gauge, heat level, Kelly multiplier, exposure breakdown |
+
+├── config.py                 # 16 Pydantic config models + hot-reload
+
+├── connectors/               # Gamma API, CLOB API, Data API, WebSocket, search, API pool| **Smart Money** | Tracked wallets, conviction signals, whale activity feed |│  │    CONNECTORS     │   │      RESEARCH      │   │        FORECAST           │   │| **Source Whitelisting** | Primary domains per market type (bls.gov, sec.gov, etc.) |
+
+├── research/                 # Query builder, source fetcher, evidence extractor
+
+├── forecast/                 # Feature builder, LLM forecaster, ensemble, calibrator| **Liquid Scanner** | 7-phase pipeline status, discovered candidates, API pool health |
+
+├── policy/                   # Edge calc, risk limits, Kelly sizer, drawdown, portfolio, arbitrage
+
+├── engine/                   # Trading loop, classifier, filter, position manager| **Performance** | Win rate, ROI, Sharpe, category breakdown, model accuracy |│  │                   │   │                    │   │                           │   │
+
+├── execution/                # Order builder, router, fill tracker, cancels
+
+├── analytics/                # Whale scanner, regime detector, calibration loop, performance| **Settings** | Environment status, config viewer, kill switch toggle |
+
+├── storage/                  # SQLite + WAL, migrations, audit trail, cache, backup
+
+├── observability/            # structlog, metrics, alerts, Sentry, reports│  │  Gamma API        │   │  Query Builder     │   │  Feature Builder (30+)    │   │This bot implements a complete, end-to-end autonomous trading pipeline for [Polymarket](https://polymarket.com) prediction markets. It combines web-scale evidence gathering, multi-model LLM probabilistic forecasting, and institutional-grade risk management into a single, self-contained system.| **Blocked Domains** | wikipedia.org, reddit.com, medium.com, twitter.com, etc. |
+
+└── dashboard/                # Flask app, glassmorphism UI, 9 tabs
+
+```- Protected by `DASHBOARD_API_KEY`
+
+
+
+Key design decisions:- Config hot-reloads without restart│  │  CLOB API         │──▶│  Source Fetcher    │──▶│  LLM Forecaster           │   │
+
+
+
+- **Pipeline architecture** — 12 deterministic steps per cycle- Auto-refreshing with live status indicators
+
+- **Triple safety gate** — 3 independent checks before any real order
+
+- **Paper-first** — everything defaults to simulation mode│  │  Data API         │   │  Evidence Extract  │   │  Multi-Model Ensemble     │   │| **Evidence Extraction** | LLM-powered: metric_name, value, unit, date per bullet |
+
+- **Zero external services** — SQLite, no Redis/Postgres/RabbitMQ required
+
+- **Modular** — each subsystem is independently testable### 📡 Observability & Alerting
+
+
+
+---│  │  Web Search       │   │  Quality Scoring   │   │  (GPT-4o/Claude/Gemini)   │   │
+
+
+
+## 🚢 Deployment- **structlog** JSON logging with automatic sensitive data redaction
+
+
+
+### Development- **Multi-channel alerts** — Telegram, Discord, Slack (with cooldowns)│  │  WebSocket Feed   │   └────────────────────┘   │  Calibrator               │   │### What It Does| **Calibrated Forecasts** | Platt-like logistic shrinkage + evidence quality penalties |
+
+
+
+```bash- **Alert triggers** — trades, drawdown warnings, kill switch, errors, daily summaries
+
+make dashboard
+
+```- **Sentry integration** — optional error tracking with data scrubbing│  │  API Pool         │                            └───────────────────────────┘   │
+
+
+
+### Docker- **API cost tracking** — per-call cost estimation for LLM and search usage
+
+
+
+```bash- **JSON run reports** — exportable reports saved to `reports/`│  │  Rate Limiter     │                                        │                   │| **Risk Controls** | 9 independent checks, kill switch, daily loss limits |
+
+docker compose up -d
+
+```
+
+
+
+### Production (systemd)### 💾 Storage & Audit│  └──────────────────┘                                         ▼                   │
+
+
+
+```ini
+
+[Unit]
+
+Description=Polymarket AI Trading Bot- **SQLite with WAL mode** — concurrent reads/writes, 10 auto-migrations│                         ┌──────────────────────────────────────────────────────┐   │1. **Discovers** active prediction markets via the Polymarket Gamma API| **Position Sizing** | Fractional Kelly criterion with confidence scaling |
+
+After=network.target
+
+- **Immutable audit trail** — every decision recorded with SHA-256 integrity checksums
+
+[Service]
+
+Type=simple- **TTL cache** — search (1hr), orderbook (30s), LLM (30min), market list (5min)│                         │                     POLICY                           │   │
+
+User=botuser
+
+WorkingDirectory=/opt/polymarket-ai-trading-bot- **Auto backup** — SQLite backup with rotation (max 10), triggered via `make backup`
+
+EnvironmentFile=/opt/polymarket-ai-trading-bot/.env
+
+ExecStart=/opt/polymarket-ai-trading-bot/.venv/bin/gunicorn \│                         │                                                      │   │2. **Classifies** each market into 11 categories with researchability scoring| **Execution Safety** | Triple dry-run gate: order, config, env var |
+
+    --bind 0.0.0.0:2345 --workers 2 --threads 4 --timeout 120 \
+
+    src.dashboard.app:app---
+
+Restart=always
+
+│                         │  Edge Calculator │ Risk Limits (15+ checks)          │   │
+
+[Install]
+
+WantedBy=multi-user.target## 🚀 Quick Start
+
+```
+
+│                         │  Position Sizer (Kelly) │ Drawdown Manager (4 heat)  │   │3. **Researches** markets autonomously using site-restricted web searches against authoritative sources| **Observability** | structlog JSON logging, metrics, run reports |
+
+**Going live:** Start on Mumbai testnet (`POLYMARKET_CHAIN_ID=80001`), validate everything, then switch to mainnet (`137`). See [DEPLOYMENT.md](DEPLOYMENT.md) for the full guide.
+
+```bash
+
+---
+
+# Clone & install│                         │  Portfolio Risk │ Arbitrage │ Timeline Intelligence   │   │
+
+## 🧪 Testing
+
+git clone https://github.com/dylanpersonguy/polymarket-ai-trading-bot.git
+
+```bash
+
+make test        # Run all testscd polymarket-ai-trading-bot│                         └──────────────────────────────────────────────────────┘   │4. **Extracts** structured evidence (metrics, dates, citations) using LLM-powered analysis
+
+make test-cov    # Tests with coverage
+
+make lint        # Ruff linterpython3 -m venv .venv && source .venv/bin/activate
+
+make format      # Auto-format
+
+make typecheck   # mypy strict modepip install -e ".[dev]"│                                               │                                   │
+
+```
+
+
+
+---
+
+# Configure│  ┌──────────────────┐                         ▼            ┌──────────────────┐   │5. **Forecasts** independent probability estimates via a multi-model ensemble (GPT-4o, Claude 3.5, Gemini 1.5 Pro)---
+
+## 🔒 Security
+
+cp .env.example .env
+
+- ✅ No API keys or secrets in the codebase
+
+- ✅ All credentials via environment variables# Edit .env → add OPENAI_API_KEY and SERPAPI_KEY at minimum│  │    ANALYTICS      │   ┌──────────────────────────────┐  │     STORAGE      │   │
+
+- ✅ structlog auto-redacts sensitive fields
+
+- ✅ Paper trading mode by default
+
+- ✅ Live trading requires 3 independent opt-ins
+
+- ✅ Docker runs as non-root `botuser`# Launch dashboard│  │                   │   │         EXECUTION             │  │                  │   │6. **Calibrates** raw forecasts using Platt scaling, historical calibration, and evidence quality adjustments
+
+- ✅ Immutable audit trail with SHA-256 checksums
+
+make dashboard
+
+---
+
+# Open http://localhost:2345│  │  Regime Detector  │   │                               │  │  SQLite + WAL    │   │
+
+## 📄 License
+
+```
+
+This project is open-source under the [MIT License](LICENSE).
+
 │  │  Whale Scanner    │   │  Order Builder (TWAP/ICE/ADT) │  │  10 Migrations   │   │7. **Calculates edge** over the market price with full transaction cost awareness## Quick Start
 
+---
+
 ### Docker
+
+Built for the prediction market community · Not financial advice
 
 │  │  Smart Entry      │   │  Order Router (dry/live)      │  │  Audit Trail     │   │
 
