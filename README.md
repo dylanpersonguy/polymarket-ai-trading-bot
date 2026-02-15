@@ -8,16 +8,137 @@ Paper trading by default. Three safety gates must be unlocked for live orders.
 
 ## Features
 
-- **Market Discovery** — scans Polymarket for active markets, classifies them into 11 categories, and filters out low-quality ones before spending API calls
-- **Research Pipeline** — builds site-restricted search queries per category, fetches full articles, scores source authority, and extracts structured evidence with citations
-- **AI Forecasting** — runs GPT-4o, Claude 3.5 Sonnet, and Gemini 1.5 Pro in parallel, then combines their outputs with trimmed-mean aggregation
-- **Calibration** — applies Platt scaling, historical accuracy correction, and penalizes weak evidence, contradictions, and model disagreement
-- **Risk Management** — 15+ independent checks including drawdown limits, position caps, edge thresholds, portfolio exposure limits, and a manual kill switch
-- **Execution** — fractional Kelly sizing with 7 multipliers, auto-selects between simple, TWAP, iceberg, and adaptive order strategies
-- **Whale Intelligence** — tracks top traders from the Polymarket leaderboard, detects position changes, and integrates conviction signals into edge calculations
-- **Dashboard** — 9-tab Flask UI on port 2345 with engine controls, live P&L, forecasts, risk gauges, whale activity, and performance metrics
-- **Observability** — structured logging, Telegram/Discord/Slack alerts, Sentry integration, and exportable JSON reports
-- **Storage** — SQLite with WAL mode, 10 auto-migrations, immutable SHA-256 audit trail, TTL caching, and automated backups
+### Market Discovery & Classification
+
+- Scans active markets from the Polymarket Gamma API with volume, liquidity, and spread filters
+- 11-category classifier (MACRO, ELECTION, CORPORATE, LEGAL, TECHNOLOGY, SCIENCE, CRYPTO, REGULATION, GEOPOLITICS, SPORTS, ENTERTAINMENT) using 100+ regex rules — no LLM cost
+- Each market gets a researchability score (0–100) that controls how much research budget it receives
+- Pre-research quality filter blocks junk markets before any expensive API calls (~90% cost savings)
+- Configurable cooldowns prevent re-scanning the same market too frequently
+
+### Autonomous Research Engine
+
+- Query builder generates site-restricted searches per category — `site:bls.gov` for macro, `site:sec.gov` for corporate, `site:fec.gov` for elections
+- Includes contrarian queries to avoid confirmation bias
+- 3 pluggable search backends — SerpAPI, Bing, Tavily — with automatic fallback if one fails
+- Full HTML extraction via BeautifulSoup, not just search snippets
+- Domain authority scoring — primary sources (1.0) > secondary (0.6) > unknown (0.3)
+- Auto-filters low-quality domains (Wikipedia, Reddit, Medium, Twitter, TikTok)
+- Source caching with configurable TTL (default 1 hour)
+
+### Multi-Model AI Forecasting
+
+- Ensemble of 3 frontier LLMs running in parallel:
+  - GPT-4o (40% weight) — primary forecaster
+  - Claude 3.5 Sonnet (35% weight) — second opinion
+  - Gemini 1.5 Pro (25% weight) — third opinion
+- 3 aggregation methods — trimmed mean, median, or weighted average
+- Models forecast independently — explicitly told not to anchor to the current market price
+- Graceful degradation — if a model fails, the ensemble continues with the remaining models
+- Adaptive weighting — tracks per-model Brier scores by category and reweights over time
+
+### Calibration & Self-Improvement
+
+- Platt scaling — logistic compression pulling extreme probabilities toward 0.50
+- Historical calibration — learns from past forecast vs. outcome pairs via logistic regression
+- Evidence quality penalty — weak evidence pulls the forecast toward 0.50
+- Contradiction penalty — conflicting sources increase uncertainty
+- Ensemble spread penalty — when models disagree by more than 10%, adds uncertainty
+- Calibration feedback loop — retrains automatically after 30+ resolved markets
+- Brier score tracking — monitors forecast accuracy over time
+
+### Risk Management (15+ Checks)
+
+Every trade must pass all of these — a single failure blocks the trade:
+
+- Kill switch — manual emergency halt
+- Drawdown auto-kill at 20% max drawdown
+- 4-level drawdown heat system:
+  - Normal (< 10%) → full sizing
+  - Warning (≥ 10%) → half sizing
+  - Critical (≥ 15%) → quarter sizing
+  - Max (≥ 20%) → all trading halted
+- Max stake per market ($50 default)
+- Daily loss limit ($500 default)
+- Max open positions (25)
+- Minimum net edge after fees (4%)
+- Minimum liquidity ($2,000)
+- Maximum spread (6%)
+- Evidence quality threshold (0.55)
+- Confidence filter (MEDIUM minimum)
+- Implied probability floor (5%)
+- Portfolio category exposure cap (35% per category)
+- Timeline endgame check (48h near resolution)
+- Arbitrage detection — scans for mispriced complementary and multi-outcome markets
+
+### Execution Engine
+
+- Fractional Kelly position sizing with 7 multipliers (confidence, drawdown, timeline, volatility, regime, category, liquidity)
+- Auto strategy selection:
+  - Simple — single limit order for small trades
+  - TWAP — splits large orders into 5 time-weighted slices
+  - Iceberg — shows only 20% of true order size
+  - Adaptive — adjusts pricing based on orderbook depth
+- Triple dry-run safety gate:
+  - `dry_run` flag on each order object
+  - `execution.dry_run` in config.yaml
+  - `ENABLE_LIVE_TRADING` environment variable
+  - All three must allow it for a real order to go through
+- Fill tracker — monitors fill rate, slippage, and time-to-fill per strategy
+- 6 exit strategies — dynamic stop-loss, trailing stop, hold-to-resolution, time-based exit, edge reversal, kill switch forced exit
+
+### Whale & Smart Money Intelligence
+
+- Wallet scanner tracks top Polymarket traders seeded from the leaderboard
+- Auto-discovers top 50 wallets by profit and top 50 by volume
+- Delta detection — spots new entries, exits, size increases, and decreases
+- Conviction scoring — combines whale count × dollar size into a signal
+- Edge integration — whales agree with model → +8% edge boost; disagree → -2% penalty
+- 7-phase liquid scanner pipeline:
+  - Seeds wallets from leaderboard → fetches markets → scans global trades → per-market whale scan → ranks addresses → deep wallet analysis → scores and saves to database
+- API pool rotates requests across multiple endpoints with round-robin, least-loaded, or weighted-random strategies
+
+### Market Microstructure
+
+- Order flow imbalance across 60min, 4hr, and 24hr windows
+- VWAP divergence — signals entry when price is below volume-weighted average
+- Whale order detection — flags individual trades above $2,000
+- Trade acceleration — detects unusual activity surges (>2× baseline)
+- Book depth ratio — measures bid vs. ask pressure
+- Smart entry calculator — combines all signals to recommend optimal entry price
+
+### Real-Time Dashboard
+
+9-tab Flask dashboard with glassmorphism dark theme on port 2345:
+
+- **Overview** — engine status, cycle count, P&L, equity curve
+- **Trading Engine** — start/stop controls, cycle history, pipeline visualization
+- **Positions** — open positions with live P&L, closed trade history
+- **Forecasts** — evidence breakdown, model vs. market probability, reasoning
+- **Risk & Drawdown** — drawdown gauge, heat level, Kelly multiplier, exposure breakdown
+- **Smart Money** — tracked wallets, conviction signals, whale activity feed
+- **Liquid Scanner** — 7-phase pipeline status, discovered candidates, API pool health
+- **Performance** — win rate, ROI, Sharpe, Sortino, Calmar, category breakdown, model accuracy
+- **Settings** — environment status, config viewer, kill switch toggle
+
+Protected by `DASHBOARD_API_KEY`. Auto-refreshing with live status indicators.
+
+### Observability & Alerting
+
+- structlog JSON logging with automatic sensitive data redaction
+- Multi-channel alerts — Telegram, Discord, Slack (with cooldowns to prevent spam)
+- Alert triggers — trades, drawdown warnings, kill switch activations, errors, daily summaries
+- Sentry integration — optional error tracking with data scrubbing
+- API cost tracking — per-call cost estimation for LLM and search usage
+- JSON run reports — exportable reports saved to `reports/`
+
+### Storage & Audit
+
+- SQLite with WAL mode for concurrent reads and writes
+- 10 automatic schema migrations
+- Immutable audit trail — every decision recorded with SHA-256 integrity checksums
+- TTL cache — search results (1hr), orderbook (30s), LLM responses (30min), market list (5min)
+- Automated backups with rotation (max 10), triggered via `make backup`
 
 ---
 
