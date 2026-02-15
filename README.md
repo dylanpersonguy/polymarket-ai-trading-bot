@@ -846,117 +846,68 @@ cp .env.example .env
 
 # 🤖 Polymarket AI Trading Bot
 
-An opinionated, production-ready trading agent for Polymarket prediction markets. Simple, safe by default, and easy to get running.
+Small description: AI-driven research & trading for Polymarket prediction markets.
 
 ---
 
-## Quick Overview
+Why it matters
 
-- Discovers markets, researches evidence, forecasts probabilities with an LLM ensemble, applies risk checks, and executes orders.
-- Paper trading by default. Live trading requires explicit opt-in via environment variables.
-
----
-
-## Key Features
-
-- Fast market scanner with pre-filters to avoid low-quality markets
-- Autonomous research pipeline (site-restricted search, HTML extraction, evidence scoring)
-- Multi-model forecasting ensemble (GPT-4o, Claude, Gemini) with calibration
-- 15+ risk checks and a 4-level drawdown heat system
-- Whale scanner and conviction signals for smart-money signals
-- Execution strategies: simple limit, TWAP, iceberg, adaptive
-- SQLite storage, immutable audit trail, and JSON run reports
-- Flask dashboard (port 2345) with live engine and positions view
+- Find data-driven edges in prediction markets without manual research.
+- Paper-first safety: test strategies with zero financial risk.
+- Plug-in your keys and scale with Docker.
 
 ---
 
-## Quick Start (local)
+Core benefits
 
-1. Clone and create a venv
+- Autonomous market discovery & research pipeline
+- Multi-model LLM ensemble with calibration
+- Institutional risk checks and wallet isolation
+- Whale scanner and smart-money signals
+- Lightweight: SQLite storage, Docker-ready
+
+---
+
+Get started (30s)
 
 ```bash
 git clone https://github.com/dylanpersonguy/polymarket-ai-trading-bot.git
 cd polymarket-ai-trading-bot
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+cp .env.example .env           # add OPENAI_API_KEY and SERPAPI_KEY
+make dashboard                 # runs in paper mode by default
 ```
 
-2. Copy env and add keys
+Want to run in Docker?
 
 ```bash
-cp .env.example .env
-# add OPENAI_API_KEY and SERPAPI_KEY at minimum
-```
-
-3. Start dashboard (paper trading)
-
-```bash
-make dashboard
-# open http://localhost:2345
+docker compose up -d
 ```
 
 ---
 
-## Common CLI
+Quick CLI cheatsheet
 
-```bash
-bot scan --limit 20            # discover active markets
-bot research --market <ID>     # research a market
-bot forecast --market <ID>     # run research → forecast → risk → size
-bot paper-trade --market <ID>  # simulated trade (dry run)
-bot trade --market <ID>        # live trade (requires ENABLE_LIVE_TRADING=true)
-bot engine start               # start continuous loop
-bot dashboard                  # open dashboard server
-```
+- `bot scan` — discover markets
+- `bot research --market <ID>` — fetch evidence
+- `bot forecast --market <ID>` — forecast + risk checks
+- `bot paper-trade --market <ID>` — simulate a trade
 
 ---
 
-## Important Configuration
+Safety note
 
-- Required (development): `OPENAI_API_KEY`, `SERPAPI_KEY`
-- Recommended: `DASHBOARD_API_KEY` (protects UI)
-- Live trading: set `ENABLE_LIVE_TRADING=true` and provide Polymarket CLOB credentials (`POLYMARKET_API_KEY`, `POLYMARKET_API_SECRET`, `POLYMARKET_PRIVATE_KEY`)
-
-All settings are in `config.yaml` and environment variables (`.env`).
+- Live trading requires `ENABLE_LIVE_TRADING=true` and full CLOB credentials.
+- The bot defaults to paper trading; do not enable live trading until you validate end-to-end.
 
 ---
 
-## Dashboard
+Star the repo if you find it useful ✨
 
-- Flask app on port `2345` (glassmorphism dark theme)
-- Tabs: Overview, Engine, Positions, Forecasts, Risk, Smart Money, Scanner, Performance, Settings
-
----
-
-## Safety & Security
-
-- Paper-first: default is dry run
-- Triple safety gate for live orders: order flag, config flag, and `ENABLE_LIVE_TRADING`
-- Drawdown heat system halts trading at critical thresholds
-- No secrets committed — keep keys in `.env`
+MIT License
 
 ---
 
-## Development & Tests
-
-Run tests and linters:
-
-```bash
-make test
-make lint
-make format
-```
-
----
-
-## License
-
-MIT — see `LICENSE`.
-
----
-
-Built for the prediction market community — not financial advice.
+Built for the Polymarket community — not financial advice.
 
 ```        │                   │                    │                    │
 
