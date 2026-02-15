@@ -844,119 +844,119 @@ cp .env.example .env
 
 - ✅ Paper trading mode by default
 
-- ✅ Live trading requires 3 independent opt-ins
+# 🤖 Polymarket AI Trading Bot
 
-- ✅ Docker runs as non-root `botuser`# Launch dashboard│  │                   │   │         EXECUTION             │  │                  │   │6. **Calibrates** raw forecasts using Platt scaling, historical calibration, and evidence quality adjustments
-
-- ✅ Immutable audit trail with SHA-256 checksums
-
-make dashboard
+An opinionated, production-ready trading agent for Polymarket prediction markets. Simple, safe by default, and easy to get running.
 
 ---
 
-# Open http://localhost:2345│  │  Regime Detector  │   │                               │  │  SQLite + WAL    │   │
+## Quick Overview
 
-## 📄 License
-
-```
-
-This project is open-source under the [MIT License](LICENSE).
-
-│  │  Whale Scanner    │   │  Order Builder (TWAP/ICE/ADT) │  │  10 Migrations   │   │7. **Calculates edge** over the market price with full transaction cost awareness## Quick Start
+- Discovers markets, researches evidence, forecasts probabilities with an LLM ensemble, applies risk checks, and executes orders.
+- Paper trading by default. Live trading requires explicit opt-in via environment variables.
 
 ---
 
-### Docker
+## Key Features
 
-Built for the prediction market community · Not financial advice
+- Fast market scanner with pre-filters to avoid low-quality markets
+- Autonomous research pipeline (site-restricted search, HTML extraction, evidence scoring)
+- Multi-model forecasting ensemble (GPT-4o, Claude, Gemini) with calibration
+- 15+ risk checks and a 4-level drawdown heat system
+- Whale scanner and conviction signals for smart-money signals
+- Execution strategies: simple limit, TWAP, iceberg, adaptive
+- SQLite storage, immutable audit trail, and JSON run reports
+- Flask dashboard (port 2345) with live engine and positions view
 
-│  │  Smart Entry      │   │  Order Router (dry/live)      │  │  Audit Trail     │   │
+---
+
+## Quick Start (local)
+
+1. Clone and create a venv
 
 ```bash
-
-cp .env.example .env   # add your API keys│  │  Adaptive Weights │   │  Fill Tracker                 │  │  TTL Cache       │   │8. **Enforces 15+ risk checks** before any trade is allowed
-
-docker compose up -d
-
-# Dashboard at http://localhost:2345│  │  Perf Tracker     │   │  Cancel Manager               │  │  Auto Backup     │   │
-
-```
-
-│  │  Calibration Loop │   └──────────────────────────────┘  └──────────────────┘   │9. **Sizes positions** using fractional Kelly criterion with drawdown-aware multipliers### 1. Clone & Install
-
----
-
-│  └──────────────────┘                                                             │
-
-## ⚙️ Environment Variables
-
-│                                                                                   │10. **Executes** orders with smart routing (TWAP, iceberg, adaptive pricing)
-
-| Variable | Required | What It's For |
-
-|----------|:--------:|---------------|│  ┌──────────────────────────────────────────────────────────────────────────────┐  │
-
-| `OPENAI_API_KEY` | ✅ | GPT-4o forecasting & evidence extraction |
-
-| `SERPAPI_KEY` | ✅ | Web search for research |│  │                           OBSERVABILITY                                      │  │11. **Monitors** positions in real-time with stop-loss, trailing stop, and resolution exit strategies```bash
-
-| `ANTHROPIC_API_KEY` | Optional | Claude for ensemble |
-
-| `GOOGLE_API_KEY` | Optional | Gemini for ensemble |│  │  Structured Logging (structlog) │ Metrics │ Alerts (Telegram/Discord/Slack)  │  │
-
-| `BING_API_KEY` | Optional | Fallback search |
-
-| `TAVILY_API_KEY` | Optional | Fallback search |│  │  Sentry Integration │ JSON Reports │ API Cost Tracking                       │  │12. **Learns** from resolved markets to improve future forecasts (calibration feedback loop)git clone <repo-url> polymarket-bot
-
-| `DASHBOARD_API_KEY` | Recommended | Dashboard authentication |
-
-| `POLYMARKET_API_KEY` | Live only | CLOB API credentials |│  └──────────────────────────────────────────────────────────────────────────────┘  │
-
-| `POLYMARKET_API_SECRET` | Live only | CLOB API secret |
-
-| `POLYMARKET_API_PASSPHRASE` | Live only | CLOB passphrase |└──────────────────────────────────────────────────────────────────────────────────┘cd polymarket-bot
-
-| `POLYMARKET_PRIVATE_KEY` | Live only | Polygon wallet key for signing |
-
-| `ENABLE_LIVE_TRADING` | Live only | Must be `true` for real orders |```
-
-| `SENTRY_DSN` | Optional | Error tracking |
-
-> ⚠️ **This bot can trade real money.** It ships with `dry_run: true` by default. Paper trading mode is the default — no real orders are placed unless explicitly enabled via environment variable and configuration.python -m venv .venv
-
----
-
----
-
-## 🖥️ CLI Commands
-
+git clone https://github.com/dylanpersonguy/polymarket-ai-trading-bot.git
+cd polymarket-ai-trading-bot
+python3 -m venv .venv
 source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+2. Copy env and add keys
 
 ```bash
+cp .env.example .env
+# add OPENAI_API_KEY and SERPAPI_KEY at minimum
+```
 
-bot scan --limit 20              # Discover active markets## Core Pipeline
+3. Start dashboard (paper trading)
 
-bot research --market <ID>       # Research a specific market
+```bash
+make dashboard
+# open http://localhost:2345
+```
 
-bot forecast --market <ID>       # Full pipeline: research → forecast → risk → size---pip install -e ".[dev]"
+---
 
-bot paper-trade --market <ID>    # Simulated trade (always dry run)
+## Common CLI
 
-bot trade --market <ID>          # Live trade (requires ENABLE_LIVE_TRADING=true)Each trading cycle follows a deterministic processing pipeline with clear data flow between stages:
+```bash
+bot scan --limit 20            # discover active markets
+bot research --market <ID>     # research a market
+bot forecast --market <ID>     # run research → forecast → risk → size
+bot paper-trade --market <ID>  # simulated trade (dry run)
+bot trade --market <ID>        # live trade (requires ENABLE_LIVE_TRADING=true)
+bot engine start               # start continuous loop
+bot dashboard                  # open dashboard server
+```
 
-bot engine start                 # Start continuous trading loop
+---
 
-bot engine status                # Show engine health```
+## Important Configuration
 
-bot dashboard                    # Launch web dashboard
+- Required (development): `OPENAI_API_KEY`, `SERPAPI_KEY`
+- Recommended: `DASHBOARD_API_KEY` (protects UI)
+- Live trading: set `ENABLE_LIVE_TRADING=true` and provide Polymarket CLOB credentials (`POLYMARKET_API_KEY`, `POLYMARKET_API_SECRET`, `POLYMARKET_PRIVATE_KEY`)
 
-bot portfolio                    # Portfolio risk report```
+All settings are in `config.yaml` and environment variables (`.env`).
 
-bot drawdown                     # Current drawdown state
+---
 
-bot arbitrage                    # Scan for arbitrageMarket Discovery ──▶ Classification ──▶ Pre-Research Filter ──▶ Web Research## Architecture
+## Dashboard
 
-bot alerts                       # Recent alert history
+- Flask app on port `2345` (glassmorphism dark theme)
+- Tabs: Overview, Engine, Positions, Forecasts, Risk, Smart Money, Scanner, Performance, Settings
+
+---
+
+## Safety & Security
+
+- Paper-first: default is dry run
+- Triple safety gate for live orders: order flag, config flag, and `ENABLE_LIVE_TRADING`
+- Drawdown heat system halts trading at critical thresholds
+- No secrets committed — keep keys in `.env`
+
+---
+
+## Development & Tests
+
+Run tests and linters:
+
+```bash
+make test
+make lint
+make format
+```
+
+---
+
+## License
+
+MIT — see `LICENSE`.
+
+---
+
+Built for the prediction market community — not financial advice.
 
 ```        │                   │                    │                    │
 
