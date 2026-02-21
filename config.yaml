@@ -57,11 +57,17 @@ risk:
   max_bankroll_fraction: 0.05
   bankroll: 5000.0
   transaction_fee_pct: 0.02
+  exit_fee_pct: 0.02
   gas_cost_usd: 0.01
   min_implied_probability: 0.05
   stop_loss_pct: 0.2
   take_profit_pct: 0.3
   max_holding_hours: 240
+  min_stake_usd: 1.0
+  volatility_high_threshold: 0.15
+  volatility_med_threshold: 0.10
+  volatility_high_min_mult: 0.4
+  volatility_med_min_mult: 0.6
   category_stake_multipliers:
     MACRO: 1.0
     CORPORATE: 0.75

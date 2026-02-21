@@ -54,6 +54,22 @@ class AlertManager:
         self._history: list[Alert] = []
         self._cooldowns: dict[str, float] = {}
         self._min_level = getattr(self.alerts_config, "min_alert_level", "info")
+        self._http_session: Any | None = None  # Lazy aiohttp.ClientSession
+
+    async def _get_session(self) -> Any:
+        """Return a reusable aiohttp.ClientSession (created lazily)."""
+        if self._http_session is None or self._http_session.closed:
+            import aiohttp
+            self._http_session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=10),
+            )
+        return self._http_session
+
+    async def close(self) -> None:
+        """Close the shared HTTP session."""
+        if self._http_session and not self._http_session.closed:
+            await self._http_session.close()
+            self._http_session = None
 
     async def send(
         self,
@@ -133,8 +149,6 @@ class AlertManager:
 
     async def _send_telegram(self, alert: Alert) -> None:
         """Send alert via Telegram Bot API."""
-        import aiohttp
-
         token = self.alerts_config.telegram_token
         chat_id = self.alerts_config.telegram_chat_id
         url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -144,21 +158,18 @@ class AlertManager:
         )
         text = f"{emoji} *{alert.title}*\n\n{alert.message}"
 
-        async with aiohttp.ClientSession() as session:
-            await session.post(
-                url,
-                json={
-                    "chat_id": chat_id,
-                    "text": text,
-                    "parse_mode": "Markdown",
-                },
-                timeout=aiohttp.ClientTimeout(total=10),
-            )
+        session = await self._get_session()
+        await session.post(
+            url,
+            json={
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "Markdown",
+            },
+        )
 
     async def _send_discord(self, alert: Alert) -> None:
         """Send alert via Discord webhook."""
-        import aiohttp
-
         color = {
             "info": 0x3498DB,
             "warning": 0xF39C12,
@@ -176,17 +187,14 @@ class AlertManager:
             }]
         }
 
-        async with aiohttp.ClientSession() as session:
-            await session.post(
-                self.alerts_config.discord_webhook,
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=10),
-            )
+        session = await self._get_session()
+        await session.post(
+            self.alerts_config.discord_webhook,
+            json=payload,
+        )
 
     async def _send_slack(self, alert: Alert) -> None:
         """Send alert via Slack webhook."""
-        import aiohttp
-
         emoji = {"info": ":information_source:", "warning": ":warning:", "critical": ":rotating_light:"}.get(
             alert.level, ":bell:"
         )
@@ -195,12 +203,11 @@ class AlertManager:
             "text": f"{emoji} *{alert.title}*\n{alert.message}",
         }
 
-        async with aiohttp.ClientSession() as session:
-            await session.post(
-                self.alerts_config.slack_webhook,
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=10),
-            )
+        session = await self._get_session()
+        await session.post(
+            self.alerts_config.slack_webhook,
+            json=payload,
+        )
 
     async def _send_email(self, alert: Alert) -> None:
         """Send alert via SMTP email."""
@@ -227,8 +234,7 @@ class AlertManager:
                     server.login(cfg.email_smtp_user, cfg.email_smtp_password)
                 server.sendmail(msg["From"], [cfg.email_to], msg.as_string())
 
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, _blocking_send)
+        await asyncio.to_thread(_blocking_send)
 
     # Convenience methods
 

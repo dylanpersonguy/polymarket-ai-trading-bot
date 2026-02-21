@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Callable, List
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -91,11 +91,18 @@ class RiskConfig(BaseModel):
     kill_switch: bool = False
     bankroll: float = 5000.0
     transaction_fee_pct: float = 0.02
+    exit_fee_pct: float = 0.02  # Fee for selling before resolution
     gas_cost_usd: float = 0.01
     min_implied_probability: float = 0.05  # Block micro-probability markets
     stop_loss_pct: float = 0.20  # Exit when position loses 20%
     take_profit_pct: float = 0.30  # Exit when position gains 30%
     max_holding_hours: float = 240.0  # Auto-exit positions held longer than this (10 days)
+    min_stake_usd: float = 1.0  # Minimum stake to avoid dust trades
+    # Volatility thresholds for position sizing
+    volatility_high_threshold: float = 0.15
+    volatility_med_threshold: float = 0.10
+    volatility_high_min_mult: float = 0.4
+    volatility_med_min_mult: float = 0.6
     category_stake_multipliers: dict[str, float] = Field(
         default_factory=lambda: {
             "MACRO": 1.0,
@@ -103,6 +110,27 @@ class RiskConfig(BaseModel):
             "ELECTION": 0.50,
         }
     )
+
+    @field_validator("kelly_fraction")
+    @classmethod
+    def _clamp_kelly(cls, v: float) -> float:
+        if v < 0 or v > 1.0:
+            raise ValueError(f"kelly_fraction must be in [0, 1], got {v}")
+        return v
+
+    @field_validator("bankroll")
+    @classmethod
+    def _positive_bankroll(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError(f"bankroll must be positive, got {v}")
+        return v
+
+    @field_validator("max_stake_per_market", "max_daily_loss")
+    @classmethod
+    def _positive_limits(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError(f"value must be positive, got {v}")
+        return v
 
 
 class DrawdownConfig(BaseModel):
@@ -258,6 +286,12 @@ class EngineConfig(BaseModel):
     cycle_interval_secs: int = 300  # 5 minutes between full cycles
 
 
+_SECRET_FIELDS = frozenset({
+    "telegram_bot_token", "discord_webhook_url", "slack_webhook_url",
+    "email_smtp_password",
+})
+
+
 class BotConfig(BaseModel):
     scanning: ScanningConfig = Field(default_factory=ScanningConfig)
     research: ResearchConfig = Field(default_factory=ResearchConfig)
@@ -276,17 +310,57 @@ class BotConfig(BaseModel):
     engine: EngineConfig = Field(default_factory=EngineConfig)
     wallet_scanner: WalletScannerConfig = Field(default_factory=WalletScannerConfig)
 
+    def redacted_dict(self) -> dict[str, Any]:
+        """Return config dict with secret values masked."""
+        raw = self.model_dump()
+        _redact_secrets(raw)
+        return raw
+
+
+def _redact_secrets(d: dict[str, Any]) -> None:
+    """Recursively mask secret fields in a dict."""
+    for k, v in d.items():
+        if isinstance(v, dict):
+            _redact_secrets(v)
+        elif k in _SECRET_FIELDS and isinstance(v, str) and v:
+            d[k] = v[:3] + "***"
+
+
+# Env var prefix → config field mapping for overrides
+_ENV_OVERRIDES: dict[str, tuple[str, str, type]] = {
+    # ENV_VAR_NAME: (section, field, cast_type)
+    "BOT_BANKROLL": ("risk", "bankroll", float),
+    "BOT_MAX_STAKE": ("risk", "max_stake_per_market", float),
+    "BOT_MAX_DAILY_LOSS": ("risk", "max_daily_loss", float),
+    "BOT_KELLY_FRACTION": ("risk", "kelly_fraction", float),
+    "BOT_DRY_RUN": ("execution", "dry_run", lambda v: v.lower() in ("true", "1", "yes")),
+    "BOT_LOG_LEVEL": ("observability", "log_level", str),
+    "BOT_SCAN_INTERVAL": ("engine", "scan_interval_minutes", int),
+    "BOT_CYCLE_INTERVAL": ("engine", "cycle_interval_secs", int),
+}
+
+
+def _apply_env_overrides(raw: dict[str, Any]) -> None:
+    """Apply environment variable overrides to raw config dict."""
+    for env_var, (section, field_name, cast) in _ENV_OVERRIDES.items():
+        val = os.environ.get(env_var)
+        if val is not None:
+            raw.setdefault(section, {})
+            raw[section][field_name] = cast(val)  # type: ignore[operator]
+
 
 def load_config(path: str | Path | None = None) -> BotConfig:
-    """Load config from YAML file, falling back to defaults."""
+    """Load config from YAML file with env var overrides, falling back to defaults."""
     if path is None:
         path = _PROJECT_ROOT / "config.yaml"
     path = Path(path)
     if path.exists():
         with open(path) as f:
             raw: dict[str, Any] = yaml.safe_load(f) or {}
-        return BotConfig(**raw)
-    return BotConfig()
+    else:
+        raw = {}
+    _apply_env_overrides(raw)
+    return BotConfig(**raw)
 
 
 def is_live_trading_enabled() -> bool:

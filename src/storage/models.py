@@ -121,3 +121,68 @@ class PerformanceLogRecord(BaseModel):
     resolved_at: str = Field(
         default_factory=lambda: dt.datetime.now(dt.timezone.utc).isoformat()
     )
+
+
+class RegimeHistoryRecord(BaseModel):
+    """Detected market regime snapshot."""
+    timestamp: str = Field(
+        default_factory=lambda: dt.datetime.now(dt.timezone.utc).isoformat()
+    )
+    regime: str = "normal"  # normal | volatile | trending | mean_reverting
+    confidence: float = 0.0
+    volatility_30d: float = 0.0
+    trend_strength: float = 0.0
+    metadata_json: str = "{}"
+
+
+class ModelForecastLogRecord(BaseModel):
+    """Individual model forecast within an ensemble run."""
+    market_id: str
+    model_name: str
+    model_probability: float = 0.5
+    confidence_level: str = "LOW"
+    reasoning: str = ""
+    latency_ms: float = 0.0
+    error: str = ""
+    created_at: str = Field(
+        default_factory=lambda: dt.datetime.now(dt.timezone.utc).isoformat()
+    )
+
+
+class CandidateRecord(BaseModel):
+    """Market candidate discovered during scan, before research."""
+    market_id: str
+    question: str = ""
+    market_type: str = ""
+    score: float = 0.0
+    volume: float = 0.0
+    liquidity: float = 0.0
+    implied_probability: float = 0.5
+    spread: float = 0.0
+    status: str = "pending"  # pending | researching | forecasted | traded | skipped
+    discovered_at: str = Field(
+        default_factory=lambda: dt.datetime.now(dt.timezone.utc).isoformat()
+    )
+
+
+class AlertRecord(BaseModel):
+    """Persisted alert for audit trail."""
+    level: str = "info"
+    title: str = ""
+    message: str = ""
+    channels_sent: str = "[]"  # JSON list
+    data_json: str = "{}"
+    created_at: str = Field(
+        default_factory=lambda: dt.datetime.now(dt.timezone.utc).isoformat()
+    )
+
+
+class CalibrationHistoryRecord(BaseModel):
+    """Calibration model training snapshot."""
+    num_samples: int = 0
+    brier_score: float = 0.0
+    calibration_error: float = 0.0
+    model_params_json: str = "{}"
+    trained_at: str = Field(
+        default_factory=lambda: dt.datetime.now(dt.timezone.utc).isoformat()
+    )

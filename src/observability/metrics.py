@@ -6,11 +6,42 @@ Can be dumped to JSON for reporting.
 
 from __future__ import annotations
 
+import math
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any
+
+_MAX_EVENTS = 10_000  # Cap event history to bound memory usage
+
+
+def _percentile(sorted_data: list[float], pct: float) -> float:
+    """Compute percentile from pre-sorted data using linear interpolation."""
+    if not sorted_data:
+        return 0.0
+    k = (len(sorted_data) - 1) * (pct / 100.0)
+    f = math.floor(k)
+    c = math.ceil(k)
+    if f == c:
+        return sorted_data[int(k)]
+    return sorted_data[int(f)] * (c - k) + sorted_data[int(c)] * (k - f)
+
+
+def _histogram_stats(values: list[float]) -> dict[str, Any]:
+    """Compute histogram statistics including percentiles."""
+    if not values:
+        return {"count": 0, "min": 0, "max": 0, "avg": 0, "p50": 0, "p95": 0, "p99": 0}
+    s = sorted(values)
+    return {
+        "count": len(s),
+        "min": s[0],
+        "max": s[-1],
+        "avg": sum(s) / len(s),
+        "p50": _percentile(s, 50),
+        "p95": _percentile(s, 95),
+        "p99": _percentile(s, 99),
+    }
 
 
 @dataclass
@@ -35,30 +66,31 @@ class MetricsCollector:
         with self._lock:
             self._counters[name] += value
             self._events.append(MetricPoint(name=name, value=value, tags=tags))
+            if len(self._events) > _MAX_EVENTS:
+                self._events = self._events[-(_MAX_EVENTS // 2):]
 
     def gauge(self, name: str, value: float, **tags: str) -> None:
         with self._lock:
             self._gauges[name] = value
             self._events.append(MetricPoint(name=name, value=value, tags=tags))
+            if len(self._events) > _MAX_EVENTS:
+                self._events = self._events[-(_MAX_EVENTS // 2):]
 
     def histogram(self, name: str, value: float, **tags: str) -> None:
         with self._lock:
             self._histograms[name].append(value)
             self._events.append(MetricPoint(name=name, value=value, tags=tags))
+            if len(self._events) > _MAX_EVENTS:
+                self._events = self._events[-(_MAX_EVENTS // 2):]
 
     def snapshot(self) -> dict[str, Any]:
-        """Return a JSON-serializable snapshot of all metrics."""
+        """Return a JSON-serializable snapshot of all metrics with percentiles."""
         with self._lock:
             return {
                 "counters": dict(self._counters),
                 "gauges": dict(self._gauges),
                 "histograms": {
-                    k: {
-                        "count": len(v),
-                        "min": min(v) if v else 0,
-                        "max": max(v) if v else 0,
-                        "avg": sum(v) / len(v) if v else 0,
-                    }
+                    k: _histogram_stats(v)
                     for k, v in self._histograms.items()
                 },
             }

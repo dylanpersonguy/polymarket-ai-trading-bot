@@ -166,7 +166,7 @@ def _parse_llm_json(raw_text: str) -> dict[str, Any]:
     return json.loads(raw_text.strip())
 
 
-async def _query_openai(model: str, prompt: str, config: ForecastingConfig) -> ModelForecast:
+async def _query_openai(model: str, prompt: str, config: ForecastingConfig, timeout_secs: int = 30) -> ModelForecast:
     """Query an OpenAI model."""
     import time
     from openai import AsyncOpenAI
@@ -185,7 +185,7 @@ async def _query_openai(model: str, prompt: str, config: ForecastingConfig) -> M
                     {"role": "user", "content": prompt},
                 ],
             ),
-            timeout=60,
+            timeout=timeout_secs,
         )
         raw = resp.choices[0].message.content or "{}"
         parsed = _parse_llm_json(raw)
@@ -207,7 +207,7 @@ async def _query_openai(model: str, prompt: str, config: ForecastingConfig) -> M
         )
 
 
-async def _query_anthropic(model: str, prompt: str, config: ForecastingConfig) -> ModelForecast:
+async def _query_anthropic(model: str, prompt: str, config: ForecastingConfig, timeout_secs: int = 30) -> ModelForecast:
     """Query an Anthropic Claude model."""
     import time
 
@@ -224,7 +224,7 @@ async def _query_anthropic(model: str, prompt: str, config: ForecastingConfig) -
                 system="You are a calibrated probabilistic forecaster. Return only valid JSON.",
                 messages=[{"role": "user", "content": prompt}],
             ),
-            timeout=60,
+            timeout=timeout_secs,
         )
         raw = resp.content[0].text if resp.content else "{}"
         parsed = _parse_llm_json(raw)
@@ -246,7 +246,7 @@ async def _query_anthropic(model: str, prompt: str, config: ForecastingConfig) -
         )
 
 
-async def _query_google(model: str, prompt: str, config: ForecastingConfig) -> ModelForecast:
+async def _query_google(model: str, prompt: str, config: ForecastingConfig, timeout_secs: int = 30) -> ModelForecast:
     """Query a Google Gemini model."""
     import time
 
@@ -254,11 +254,17 @@ async def _query_google(model: str, prompt: str, config: ForecastingConfig) -> M
     try:
         import google.generativeai as genai
         await rate_limiter.get("google").acquire()
-        genai.configure(api_key=os.environ.get("GOOGLE_API_KEY", ""))
+        api_key = os.environ.get("GOOGLE_API_KEY", "")
         gmodel = genai.GenerativeModel(model)
-        resp = await asyncio.to_thread(
-            gmodel.generate_content,
-            f"You are a calibrated probabilistic forecaster. Return only valid JSON.\n\n{prompt}",
+        # Configure per-request to avoid thread-safety issues with global state
+        gmodel._client = genai.GenerativeModel(model)
+        genai.configure(api_key=api_key)
+        resp = await asyncio.wait_for(
+            asyncio.to_thread(
+                gmodel.generate_content,
+                f"You are a calibrated probabilistic forecaster. Return only valid JSON.\n\n{prompt}",
+            ),
+            timeout=timeout_secs,
         )
         raw = resp.text or "{}"
         parsed = _parse_llm_json(raw)
@@ -291,16 +297,16 @@ def _route_model(model: str) -> str:
 
 
 async def _query_model(
-    model: str, prompt: str, config: ForecastingConfig
+    model: str, prompt: str, config: ForecastingConfig, timeout_secs: int = 30,
 ) -> ModelForecast:
     """Route a model query to the appropriate provider."""
     provider = _route_model(model)
     if provider == "anthropic":
-        return await _query_anthropic(model, prompt, config)
+        return await _query_anthropic(model, prompt, config, timeout_secs)
     elif provider == "google":
-        return await _query_google(model, prompt, config)
+        return await _query_google(model, prompt, config, timeout_secs)
     else:
-        return await _query_openai(model, prompt, config)
+        return await _query_openai(model, prompt, config, timeout_secs)
 
 
 class EnsembleForecaster:
@@ -324,8 +330,9 @@ class EnsembleForecaster:
         prompt = _build_prompt(features, evidence)
 
         # Query all models concurrently
+        timeout = self._ensemble.timeout_per_model_secs
         tasks = [
-            _query_model(model, prompt, self._forecast)
+            _query_model(model, prompt, self._forecast, timeout)
             for model in self._ensemble.models
         ]
         forecasts = await asyncio.gather(*tasks)
@@ -344,9 +351,23 @@ class EnsembleForecaster:
                 succeeded=len(successes),
                 required=self._ensemble.min_models_required,
             )
-            # Fallback to single model
-            fallback = await _query_openai(
-                self._ensemble.fallback_model, prompt, self._forecast
+            # Fallback — try a different provider if the primary fallback failed
+            fallback_model = self._ensemble.fallback_model
+            fallback_provider = _route_model(fallback_model)
+            failed_providers = {_route_model(f.model_name) for f in failures}
+            if fallback_provider in failed_providers:
+                # Switch fallback to a provider that didn't fail
+                alt_models = {
+                    "openai": "gpt-4o",
+                    "anthropic": "claude-3-5-sonnet-20241022",
+                    "google": "gemini-1.5-pro",
+                }
+                for prov, mdl in alt_models.items():
+                    if prov not in failed_providers:
+                        fallback_model = mdl
+                        break
+            fallback = await _query_model(
+                fallback_model, prompt, self._forecast, timeout,
             )
             if fallback.error:
                 return EnsembleResult(

@@ -65,6 +65,10 @@ def calculate_edge(
     transaction_fee_pct: float = 0.0,
     gas_cost_usd: float = 0.0,
     stake_usd: float = 100.0,
+    exit_fee_pct: float = 0.0,
+    hold_to_resolution: bool = True,
+    holding_hours: float = 0.0,
+    annual_opportunity_cost: float = 0.05,
 ) -> EdgeResult:
     """Calculate trading edge with transaction cost awareness.
 
@@ -72,13 +76,23 @@ def calculate_edge(
     If model_prob < implied_prob → edge on NO (buy NO token).
 
     Transaction costs are deducted from the edge to get net_edge.
+    When hold_to_resolution is False, exit_fee_pct is included.
+    A time-value-of-money discount is applied for capital lockup.
     """
     raw_edge = model_prob - implied_prob
 
-    # Single-leg cost — we hold to resolution, no exit trade
-    total_cost_pct = transaction_fee_pct  # entry fee only (hold-to-resolution)
+    # Cost model: entry fee always; exit fee only when not holding to resolution
+    total_cost_pct = transaction_fee_pct  # entry fee
+    if not hold_to_resolution and exit_fee_pct > 0:
+        total_cost_pct += exit_fee_pct  # exit/sell fee
     if stake_usd > 0:
         total_cost_pct += gas_cost_usd / stake_usd  # gas as % of stake
+
+    # Time-value-of-money discount for capital lockup
+    time_discount = 0.0
+    if holding_hours > 0 and annual_opportunity_cost > 0:
+        years_locked = holding_hours / (365.25 * 24)
+        time_discount = annual_opportunity_cost * years_locked
 
     if raw_edge >= 0:
         direction = "BUY_YES"
@@ -93,9 +107,9 @@ def calculate_edge(
         ev = (no_model * 1.0 - cost) / cost
         break_even = 1.0 - cost * (1 + total_cost_pct)
 
-    # Net edge after costs
-    net_edge = abs(raw_edge) - total_cost_pct
-    net_ev = ev - total_cost_pct
+    # Net edge after costs and time discount
+    net_edge = abs(raw_edge) - total_cost_pct - time_discount
+    net_ev = ev - total_cost_pct - time_discount
 
     edge_pct = raw_edge / implied_prob if implied_prob > 0 else 0.0
 
@@ -108,7 +122,7 @@ def calculate_edge(
         expected_value_per_dollar=ev,
         is_positive=net_edge > 0,
         transaction_cost_pct=total_cost_pct,
-        net_edge=net_edge if raw_edge >= 0 else -net_edge,
+        net_edge=net_edge,  # Always positive when edge is profitable
         net_ev_per_dollar=net_ev,
         break_even_probability=break_even,
     )
@@ -120,6 +134,7 @@ def calculate_edge(
         raw_edge=round(raw_edge, 3),
         net_edge=round(net_edge, 3),
         cost_pct=round(total_cost_pct, 4),
+        time_discount=round(time_discount, 4),
         direction=direction,
         ev_per_dollar=round(ev, 3),
     )
@@ -132,10 +147,13 @@ def calculate_multi_outcome_edge(
     implied_probs: list[float],
     model_probs: list[float],
     transaction_fee_pct: float = 0.0,
+    exit_fee_pct: float = 0.0,
+    hold_to_resolution: bool = True,
 ) -> MultiOutcomeEdge:
     """Calculate edge across all outcomes in a multi-outcome market.
 
     Identifies the best outcome to bet on and detects overround (vig).
+    Cost model: entry fee always, exit fee only when not holding to resolution.
     """
     if len(outcomes) != len(implied_probs) or len(outcomes) != len(model_probs):
         raise ValueError("outcomes, implied_probs, and model_probs must have same length")
@@ -151,10 +169,13 @@ def calculate_multi_outcome_edge(
     edges = [m - i for m, i in zip(model_probs, adj_implied)]
 
     # Find best edge (considering costs)
+    round_trip_cost = transaction_fee_pct
+    if not hold_to_resolution and exit_fee_pct > 0:
+        round_trip_cost += exit_fee_pct
     best_idx = -1
     best_net_edge = -float("inf")
     for i, edge in enumerate(edges):
-        net = abs(edge) - transaction_fee_pct * 2
+        net = abs(edge) - round_trip_cost
         if net > best_net_edge:
             best_net_edge = net
             best_idx = i

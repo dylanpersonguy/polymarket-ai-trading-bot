@@ -118,10 +118,16 @@ def calculate_position_size(
 
     # Volatility adjustment: reduce sizing for volatile markets
     vol_mult = 1.0
-    if price_volatility > 0.15:
-        vol_mult = max(0.4, 1.0 - (price_volatility - 0.15) * 2)
-    elif price_volatility > 0.10:
-        vol_mult = max(0.6, 1.0 - (price_volatility - 0.10) * 3)
+    if price_volatility > risk_config.volatility_high_threshold:
+        vol_mult = max(
+            risk_config.volatility_high_min_mult,
+            1.0 - (price_volatility - risk_config.volatility_high_threshold) * 2,
+        )
+    elif price_volatility > risk_config.volatility_med_threshold:
+        vol_mult = max(
+            risk_config.volatility_med_min_mult,
+            1.0 - (price_volatility - risk_config.volatility_med_threshold) * 3,
+        )
 
     # Apply all multipliers
     combined_mult = kelly_mult * drawdown_multiplier * timeline_multiplier * vol_mult * regime_multiplier * category_multiplier
@@ -140,14 +146,20 @@ def calculate_position_size(
     stake = min(full_kelly_stake, max_stake, max_bankroll, max_liquidity)
     stake = max(0.0, stake)
 
+    # Enforce minimum stake floor to avoid dust trades
+    if 0 < stake < risk_config.min_stake_usd:
+        stake = 0.0
+
     # Determine what capped it
     if drawdown_multiplier <= 0:
         capped_by = "drawdown"
+    elif stake == 0.0 and full_kelly_stake > 0:
+        capped_by = "min_stake"
     elif stake >= full_kelly_stake - 0.01:
         capped_by = "kelly"
     elif stake >= max_stake - 0.01:
         capped_by = "max_stake"
-    elif liquidity_usd > 0 and stake >= max_liquidity - 0.01:
+    elif liquidity_usd > 0 and max_liquidity < float("inf") and stake >= max_liquidity - 0.01:
         capped_by = "liquidity"
     else:
         capped_by = "max_bankroll"
@@ -181,5 +193,6 @@ def calculate_position_size(
         tl_mult=round(timeline_multiplier, 2),
         vol_mult=round(vol_mult, 2),
         regime_mult=round(regime_multiplier, 2),
+        category_mult=round(category_multiplier, 2),
     )
     return result
