@@ -18,8 +18,24 @@ jobs:
             const firstLine = commitMsg.split('\n')[0];
             const repo = context.payload.repository?.full_name || 'unknown';
             const branch = (context.ref || '').replace('refs/heads/', '');
-            const actor = context.actor;
             const sha = (context.sha || '').substring(0, 7);
+
+            // Translate commit message to Spanish via LibreTranslate (free, no key)
+            let spanishMsg = firstLine;
+            try {
+              const res = await fetch('https://lingva.ml/api/v1/en/es/' + encodeURIComponent(firstLine));
+              const data = await res.json();
+              if (data.translation) spanishMsg = data.translation;
+            } catch (e) {
+              // Fallback: try another free endpoint
+              try {
+                const res2 = await fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(firstLine) + '&langpair=en|es');
+                const data2 = await res2.json();
+                if (data2.responseData?.translatedText) spanishMsg = data2.responseData.translatedText;
+              } catch (e2) {
+                // If all fails, just use original
+              }
+            }
 
             const text = [
               `\u{1F680} *New Update* \u2014 \`${repo}\``,
@@ -30,7 +46,7 @@ jobs:
               ``,
               `\u{1F1EA}\u{1F1F8} Nuestros desarrolladores acaban de implementar nuevos cambios:`,
               ``,
-              `\u{1F4DD} \`${firstLine}\``,
+              `\u{1F4DD} \`${spanishMsg}\``,
               ``,
               `\u{1F33F} Branch: \`${branch}\` \u2022 \`${sha}\``,
             ].join('\n');
